@@ -43,6 +43,8 @@ data class Conversion(
             check(lbody, rbody, pbody)
           }
         }
+        lhs is LamTerm -> checkLam(lhs, rhs, type)
+        rhs is LamTerm -> checkLam(rhs, lhs, type)
         // TODO: lhs is but not rhs
         else -> check(lhs, rhs, null)
       }
