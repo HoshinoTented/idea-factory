@@ -2,6 +2,7 @@ package com.github.hoshinotented.tyck
 
 import com.github.hoshinotented.resolve.FreeBinding
 import com.github.hoshinotented.syntax.core.*
+import com.github.hoshinotented.syntax.core.Term.Companion.instantiate
 import com.github.hoshinotented.tyck.WHNormalizer.whnf
 import com.github.hoshinotented.tyck.ctx.LocalContext
 
@@ -70,6 +71,23 @@ data class Conversion(
       is BoolTerm -> if (rhs is BoolTerm && lhs.value == rhs.value) {
         BoolTyTerm
       } else null
+      
+      is LetTerm -> if (rhs is LetTerm) {
+        if (!check(lhs.definedAs, rhs.definedAs, null)) {
+          null
+        } else if (!check(lhs.name.type, rhs.name.type, null)) {
+          null
+        } else {
+          // We need to check body inside a LetTerm
+          // But recall that Let also record the definition information, that is,
+          // [a] in the body of [let a := b in b] is in fact a [b], so
+          // the conversion check `[let a := b in a] = [let a := b in b]` should success
+          
+          TODO()
+        }
+      } else {
+        TODO()
+      }
       
       else -> noRules(lhs, rhs)
     }

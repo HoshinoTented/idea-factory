@@ -21,7 +21,7 @@ class ExprTycker(override val localCtx: LocalContext) : Contextful<ExprTycker> {
     }
   }
   
-  fun badExpr(expr: Expr, type: Term): Nothing {
+  private fun badExpr(expr: Expr, type: Term): Nothing {
     throw IllegalStateException("Bad expr: |- $expr : $type")
   }
   
@@ -29,16 +29,20 @@ class ExprTycker(override val localCtx: LocalContext) : Contextful<ExprTycker> {
    * Check judgement like: [localCtx] |- [expr] : [type]
    */
   fun inherit(expr: Expr, type: Term): Result<Term> {
-    val type = whnf(type)
+    val whTy = whnf(type)
     return when (expr) {
-      is Expr.Lam -> if (type is PiTerm) {
+      is Expr.Lam -> if (whTy is PiTerm) {
         val wellBody = subscoped {
-          localCtx[expr.param] = type.param.type
-          inherit(expr.body, type.last.instantiate(FreeRefTerm(expr.param)))
+          localCtx[expr.param] = whTy.param.type
+          inherit(expr.body, whTy.last.instantiate(FreeRefTerm(expr.param)))
         }
         
         Result.Default(LamTerm(wellBody.wellTyped.bind(expr.param)), type)
       } else badExpr(expr, type)
+      
+      is Expr.Let -> checkLet(expr) {
+        inherit(it, type)
+      }
       
       // fallback
       else -> {
@@ -49,7 +53,7 @@ class ExprTycker(override val localCtx: LocalContext) : Contextful<ExprTycker> {
     }
   }
   
-  fun ty(expr: Expr): Result<Formation> {
+  fun ty(expr: Expr): Result<Term> {
     return when (expr) {
       is Expr.Pi -> {
         val wellParam = param(expr.param)
@@ -67,6 +71,9 @@ class ExprTycker(override val localCtx: LocalContext) : Contextful<ExprTycker> {
       }
       
       is Expr.Sigma -> TODO()
+      
+      is Expr.Let -> checkLet(expr, this::ty)
+      
       Expr.BoolTy -> Result.Default(BoolTyTerm, Type)
       Expr.Type -> Result.Default(Type, Type)
       
@@ -97,9 +104,31 @@ class ExprTycker(override val localCtx: LocalContext) : Contextful<ExprTycker> {
       is Expr.Sigma -> TODO()
       is Expr.Tup -> TODO()
       
+      is Expr.Let -> checkLet(expr, this::synthesize)
+      
       is Expr.Bool -> Result.Default(BoolTerm(expr.value), BoolTyTerm)
       Expr.BoolTy, Expr.Type -> ty(expr)
     }
+  }
+  
+  private fun checkLetBody(term: Term, bind: FreeBinding, bindTy: Term, definedAs: Term): Term {
+    return if (Usage(bind).find(term) > 0) {
+      LetTerm(Term.Param(bind.name, bindTy), definedAs, term.bind(bind))
+    } else term.bind(bind)
+  }
+  
+  private fun checkLet(expr: Expr.Let, checker: (Expr) -> Result<Term>): Result<Term> {
+    val wellBind = checker(expr.param.definedAs)
+    val wellBody = subscoped {
+      localCtx[expr.param.bind] = wellBind.type
+      checker(expr.body)
+    }
+    
+    // Note that the type of wellBody may refer to [expr.param.bind]
+    val wellBodyTm = checkLetBody(wellBody.wellTyped, expr.param.bind, wellBind.type, wellBind.wellTyped)
+    val wellBodyTy = checkLetBody(wellBody.type, expr.param.bind, wellBind.type, wellBind.wellTyped)
+    
+    return Result.Default(wellBodyTm, wellBodyTy)
   }
   
   private fun param(param: Expr.Param): Result<FreeParam> {

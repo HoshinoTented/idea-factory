@@ -27,6 +27,11 @@ data class ExprResolver(val ctx: Context) : (Expr) -> Expr {
       is Expr.Tup -> TODO()
       is Expr.App -> expr.map(this)
       is Expr.Bool -> expr
+      is Expr.Let -> {
+        val wellBind = expr.param.copy(definedAs = this(expr.param.definedAs))
+        val wellBody = ctx.bind(expr.param.bind).enter()(expr.body)
+        Expr.Let(wellBind, wellBody)
+      }
       Expr.BoolTy -> expr
       Expr.Type -> expr
     }

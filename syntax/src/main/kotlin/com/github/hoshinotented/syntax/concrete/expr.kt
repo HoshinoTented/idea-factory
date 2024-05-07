@@ -2,6 +2,7 @@ package com.github.hoshinotented.syntax.concrete
 
 import com.github.hoshinotented.resolve.Binding
 import com.github.hoshinotented.resolve.FreeBinding
+import com.github.hoshinotented.syntax.concrete.Expr.Let.Bind
 import com.github.hoshinotented.util.Nested
 import kala.collection.immutable.ImmutableSeq
 
@@ -86,6 +87,20 @@ sealed interface Expr {
   data class Tup(val elements: ImmutableSeq<Expr>) : Expr {
     override fun map(mapper: (Expr) -> Expr): Expr {
       return Tup(elements.map(mapper))
+    }
+  }
+  
+  data class Let(override val param: Bind, override val body: Expr) : Expr, Nested<Bind, Expr, Let> {
+    data class Bind(val bind: FreeBinding, val definedAs: Expr)
+    
+    override fun map(mapper: (Expr) -> Expr): Expr {
+      return copy(param = param.copy(definedAs = mapper(param.definedAs)), body = mapper(body))
+    }
+    
+    override val bodyMaybe: Let? = body as? Let
+    
+    override fun safeCast(term: Let): Expr {
+      return term
     }
   }
 }

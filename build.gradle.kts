@@ -23,6 +23,7 @@ allprojects {
 tasks.test {
   useJUnitPlatform()
 }
+
 kotlin {
   jvmToolchain(21)
 }

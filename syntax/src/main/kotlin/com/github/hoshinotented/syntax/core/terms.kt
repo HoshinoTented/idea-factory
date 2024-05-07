@@ -4,6 +4,18 @@ import com.github.hoshinotented.resolve.FreeBinding
 import kala.collection.SeqView
 
 sealed interface Term {
+  companion object {
+    fun Term.map(f: (Term) -> Term): Term = map { _, t ->
+      f(t)
+    }
+    
+    fun Term.forEach(f: (Term) -> Unit): Unit {
+      map { t -> f(t); t }
+    }
+    
+    fun Term.instantiate(bind: FreeBinding): Term = instantiate(FreeRefTerm(bind))
+  }
+  
   fun bindAt(ref: FreeBinding, index: Int): Term = map { idx, t ->
     t.bindAt(ref, index + idx)
   }
@@ -25,10 +37,6 @@ sealed interface Term {
   fun instantiateTele(tele: SeqView<Term>) = instantiateAll(tele.reversed())
   
   fun map(f: (Int, Term) -> Term): Term
-  
-  fun map(f: (Term) -> Term): Term = map { _, t ->
-    f(t)
-  }
   
   data class Param(val name: String, val type: Term) {
     fun map(f: (Int, Term) -> Term): Param {
@@ -106,5 +114,15 @@ data class AppTerm(val f: Term, val a: Term) : Term {
 data class BoolTerm(val value: Boolean) : Term, StableWHNF, LeafTerm {
   override fun toString(): String {
     return value.toString()
+  }
+}
+
+data class LetTerm(val name: Term.Param, val definedAs: Term, val body: Term) : Term {
+  override fun map(f: (Int, Term) -> Term): Term {
+    return copy(name = name.map(f), definedAs = f(0, definedAs), body = f(1, body))
+  }
+  
+  override fun toString(): String {
+    return "let ${name.name} : ${name.type} := $definedAs in $body"
   }
 }

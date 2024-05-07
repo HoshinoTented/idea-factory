@@ -8,10 +8,23 @@ sealed interface ContextElement {
   }
 }
 
+/**
+ * A [Context] for [ExprResolver]
+ */
 interface Context {
+  /** @return parent [Context], null if this one is top level. */
   val parent: Context?
+  
+  /**
+   * Resolve [name] to some [ContextElement]
+   * @param name the name
+   * @return a [ContextElement] correspond to [name], null if failed to resolve
+   */
   operator fun get(name: String): ContextElement?
   
+  /**
+   * Empty [Context], used for root context.
+   */
   data object Empty : Context {
     override val parent: Context? = null
     override fun get(name: String): ContextElement? {
