@@ -1,9 +1,7 @@
 package com.github.hoshinotented.tyck
 
-import com.github.hoshinotented.resolve.FreeBinding
 import com.github.hoshinotented.syntax.core.*
 import com.github.hoshinotented.syntax.core.Term.Companion.map
-import kala.collection.immutable.ImmutableMap
 
 object WHNormalizer : (Term) -> Term {
   fun whnf(term: Term): Term {
