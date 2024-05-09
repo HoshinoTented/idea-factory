@@ -5,12 +5,12 @@ import com.github.hoshinotented.syntax.concrete.Expr
 import com.github.hoshinotented.syntax.core.*
 import com.github.hoshinotented.tyck.WHNormalizer.whnf
 import com.github.hoshinotented.tyck.ctx.LocalContext
+import com.github.hoshinotented.tyck.ctx.LocalDefinitions
 
-class ExprTycker(override val localCtx: LocalContext) : Contextful<ExprTycker> {
-  override fun setLocalCtx(newCtx: LocalContext): ExprTycker {
-    return ExprTycker((newCtx))
-  }
-  
+class ExprTycker(
+  override val localCtx: LocalContext,
+  override val localDefs: LocalDefinitions
+) : Contextful<ExprTycker> {
   fun unifyReport(lhs: Term, rhs: Term, type: Term?) {
     // This is safe, since we can only modify LocalContexts those we construct
     val result = Conversion(localCtx)
@@ -145,5 +145,9 @@ class ExprTycker(override val localCtx: LocalContext) : Contextful<ExprTycker> {
     val type: Term
     
     data class Default<out T>(override val wellTyped: T, override val type: Term) : Result<T>
+  }
+  
+  override fun set(newCtx: LocalContext, newDef: LocalDefinitions): ExprTycker {
+    return ExprTycker(newCtx, newDef)
   }
 }

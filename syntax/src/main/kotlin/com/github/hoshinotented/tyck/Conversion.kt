@@ -5,12 +5,14 @@ import com.github.hoshinotented.syntax.core.*
 import com.github.hoshinotented.syntax.core.Term.Companion.instantiate
 import com.github.hoshinotented.tyck.WHNormalizer.whnf
 import com.github.hoshinotented.tyck.ctx.LocalContext
+import com.github.hoshinotented.tyck.ctx.LocalDefinitions
 
 data class Conversion(
-  override val localCtx: LocalContext
+  override val localCtx: LocalContext,
+  override val localDefs: LocalDefinitions
 ) : Contextful<Conversion> {
-  override fun setLocalCtx(newCtx: LocalContext): Conversion {
-    return Conversion(newCtx)
+  override fun set(newCtx: LocalContext, newDef: LocalDefinitions): Conversion {
+    return Conversion(newCtx, newDef)
   }
   
   fun check(lhs: Term, rhs: Term, type: Term?): Boolean {
