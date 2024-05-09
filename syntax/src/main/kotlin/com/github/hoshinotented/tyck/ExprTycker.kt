@@ -13,7 +13,7 @@ class ExprTycker(
 ) : Contextful<ExprTycker> {
   fun unifyReport(lhs: Term, rhs: Term, type: Term?) {
     // This is safe, since we can only modify LocalContexts those we construct
-    val result = Conversion(localCtx)
+    val result = Conversion(localCtx, localDefs)
       .check(lhs, rhs, type)
     
     if (!result) {
