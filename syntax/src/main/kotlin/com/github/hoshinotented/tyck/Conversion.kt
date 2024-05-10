@@ -2,32 +2,32 @@ package com.github.hoshinotented.tyck
 
 import com.github.hoshinotented.resolve.FreeBinding
 import com.github.hoshinotented.syntax.core.*
-import com.github.hoshinotented.syntax.core.Term.Companion.instantiate
-import com.github.hoshinotented.tyck.WHNormalizer.whnf
 import com.github.hoshinotented.tyck.ctx.LocalContext
 import com.github.hoshinotented.tyck.ctx.LocalDefinitions
 
-data class Conversion(
-  override val localCtx: LocalContext,
-  override val localDefs: LocalDefinitions
-) : Contextful<Conversion> {
-  override fun set(newCtx: LocalContext, newDef: LocalDefinitions): Conversion {
-    return Conversion(newCtx, newDef)
+class Conversion(
+  localCtx: LocalContext,
+  localDefs: LocalDefinitions,
+) : AbstractTycker<Conversion>(localCtx, localDefs) {
+  override fun set(newCtx: LocalContext, newDefs: LocalDefinitions): Conversion {
+    return Conversion(newCtx, newDefs)
   }
   
-  fun check(lhs: Term, rhs: Term, type: Term?): Boolean {
-    val result = checkApproximate(lhs, rhs)
+  fun check(preLhs: Term, preRhs: Term, type: Term?): Boolean {
+    val result = checkApproximate(preLhs, preRhs)
     if (result != null) return if (type != null) {
       checkUntyped(result, type) != null
     } else true
     
-    val lhs = whnf(lhs)
-    val rhs = whnf(rhs)
+    val lhs = whnf(preLhs)
+    val rhs = whnf(preRhs)
     //  we no need to run the following code, since it will be done in checkUntyped
     //  result = checkApproximate(lhs, rhs)
     
-    if (type != null) return checkTyped(lhs, rhs, whnf(type))
-    return checkUntyped(lhs, rhs) != null
+    return loadLet(lhs, rhs) { lhsBody, rhsBody ->
+      if (type != null) checkTyped(lhsBody, rhsBody, whnf(type))
+      else checkUntyped(lhsBody, rhsBody) != null
+    }
   }
   
   private fun checkTyped(lhs: Term, rhs: Term, type: Term): Boolean {
@@ -47,7 +47,6 @@ data class Conversion(
         }
         lhs is LamTerm -> checkLam(lhs, rhs, type)
         rhs is LamTerm -> checkLam(rhs, lhs, type)
-        // TODO: lhs is but not rhs
         else -> check(lhs, rhs, null)
       }
       
@@ -76,23 +75,8 @@ data class Conversion(
         BoolTyTerm
       } else null
       
-      is LetTerm -> if (rhs is LetTerm) {
-        if (!check(lhs.definedAs, rhs.definedAs, null)) {
-          null
-        } else if (!check(lhs.name.type, rhs.name.type, null)) {
-          null
-        } else {
-          // We need to check body inside a LetTerm
-          // But recall that Let also record the definition information, that is,
-          // [a] in the body of [let a := b in b] is in fact a [b], so
-          // the conversion check `[let a := b in a] = [let a := b in b]` should success
-          
-          TODO()
-        }
-      } else {
-        TODO()
-      }
-      
+      // explicit for hint!
+      is LetTerm -> noRules(lhs, rhs)
       else -> noRules(lhs, rhs)
     }
   }
@@ -149,6 +133,35 @@ data class Conversion(
       localCtx[binding] = type.param.type
       check(lbody, rbody, pbody)
     }
+  }
+  
+  private fun checkLetBind(lhs: LetTerm.Bind, rhs: LetTerm.Bind): Boolean {
+    // check type
+    if (!check(lhs.name.type, rhs.name.type, null)) return false
+    // check definedAs
+    return check(lhs.definedAs, rhs.definedAs, lhs.name.type)
+  }
+  
+  private fun checkLet(lhs: LetTerm, rhs: Term, type: Term, checker: (Term, Term, Term) -> Boolean): Boolean {
+    return load(lhs) {
+      checker(rhs, it, type)
+    }
+  }
+  
+  private fun loadLet(lhs: Term, rhs: Term, checker: Conversion.(Term, Term) -> Boolean): Boolean {
+    return if (lhs is LetTerm) {
+      load(lhs) { lhsBody ->
+        if (rhs is LetTerm) {
+          load(rhs) { rhsBody ->
+            checker(lhsBody, rhsBody)
+          }
+        } else checker(lhsBody, rhs)
+      }
+    } else if (rhs is LetTerm) {
+      load(rhs) { rhsBody ->
+        checker(lhs, rhsBody)
+      }
+    } else checker(lhs, rhs)
   }
   
   private fun noRules(lhs: Term, rhs: Term): Nothing {

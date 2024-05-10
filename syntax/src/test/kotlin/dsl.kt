@@ -12,8 +12,8 @@ fun pi(param0: Pair<String, Expr>, vararg params: Pair<String, Expr>, last: Expr
   return Nested.build(allParam, last, Expr::Pi)
 }
 
-fun lam(param: String, body: Expr): Expr.Lam {
-  return Expr.Lam(FreeBinding(param), body)
+fun lam(param: String, body: (Expr) -> Expr): Expr.Lam {
+  return Expr.Lam(FreeBinding(param), body.invoke(ref(param)))
 }
 
 fun app(f: Expr, vararg args: Expr): Expr {
@@ -24,6 +24,14 @@ fun app(f: Expr, vararg args: Expr): Expr {
 
 fun ref(name: String): Expr.RawRef {
   return Expr.RawRef(name)
+}
+
+fun bind(name: String, ty: Expr, definedAs: Expr): Expr.Let.Bind {
+  return Expr.Let.Bind(FreeBinding(name), ty, definedAs)
+}
+
+fun let(bind: Expr.Let.Bind, body: (Expr) -> Expr): Expr.Let {
+  return Expr.Let(bind, body.invoke(ref(bind.bind.name)))
 }
 
 val True: Expr = Expr.Bool(true)

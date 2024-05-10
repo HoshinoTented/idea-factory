@@ -9,6 +9,12 @@ data class LocalContext(
   override val parent: LocalContext?,
   override val map: MutableMap<FreeBinding, Term>,
 ) : Scoped<FreeBinding, Term, LocalContext> {
+  companion object {
+    fun create(): LocalContext {
+      return LocalContext(null, MutableMap.create())
+    }
+  }
+  
   override val self: LocalContext = this
   
   fun put(param: FreeParam) {

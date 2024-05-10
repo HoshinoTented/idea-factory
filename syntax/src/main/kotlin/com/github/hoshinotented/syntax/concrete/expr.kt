@@ -91,10 +91,14 @@ sealed interface Expr {
   }
   
   data class Let(override val param: Bind, override val body: Expr) : Expr, Nested<Bind, Expr, Let> {
-    data class Bind(val bind: FreeBinding, val definedAs: Expr)
+    data class Bind(val bind: FreeBinding, val type: Expr, val definedAs: Expr) {
+      fun map(mapper: (Expr) -> Expr): Bind {
+        return copy(type = mapper(type), definedAs = mapper(definedAs))
+      }
+    }
     
     override fun map(mapper: (Expr) -> Expr): Expr {
-      return copy(param = param.copy(definedAs = mapper(param.definedAs)), body = mapper(body))
+      return copy(param = param.map(mapper), body = mapper(body))
     }
     
     override val bodyMaybe: Let? = body as? Let

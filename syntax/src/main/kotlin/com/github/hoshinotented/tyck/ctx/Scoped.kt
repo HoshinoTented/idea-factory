@@ -41,14 +41,16 @@ interface Scoped<K : Any, V : Any, This : Scoped<K, V, This>> {
     }
   }
   
-  operator fun get(key: K): V {
+  fun getOrNull(key: K): V? {
     return self.fold(Option.none<V>()) { acc, ctx ->
       acc.orElse {
         Option.ofNullable(ctx.getLocal(key))
       }
-    }.getOrThrow {
-      IllegalStateException("Not in scope: $key")
-    }
+    }.orNull
+  }
+  
+  operator fun get(key: K): V {
+    return getOrNull(key) ?: throw IllegalStateException("Not in scope: $key")
   }
   
   operator fun set(key: K, value: V) {

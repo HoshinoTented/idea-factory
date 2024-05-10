@@ -21,5 +21,21 @@ interface Nested<Param, Term, This> where This : Nested<Param, Term, This> {
         result.safeCast(result)
       } as This
     }
+    
+    inline fun <Param, Term, This> This.destruct(paramConsumer: (Param) -> Unit): Term
+            where Param : Any,
+                  Term : Any,
+                  This : Nested<Param, Term, This> {
+      var nested: This? = this
+      var body: Term = this.body
+      
+      while (nested != null) {
+        paramConsumer.invoke(nested.param)
+        body = nested.body
+        nested = nested.bodyMaybe
+      }
+      
+      return body
+    }
   }
 }

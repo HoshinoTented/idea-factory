@@ -3,14 +3,13 @@ package com.github.hoshinotented.tyck
 import com.github.hoshinotented.resolve.FreeBinding
 import com.github.hoshinotented.syntax.concrete.Expr
 import com.github.hoshinotented.syntax.core.*
-import com.github.hoshinotented.tyck.WHNormalizer.whnf
 import com.github.hoshinotented.tyck.ctx.LocalContext
 import com.github.hoshinotented.tyck.ctx.LocalDefinitions
 
 class ExprTycker(
-  override val localCtx: LocalContext,
-  override val localDefs: LocalDefinitions
-) : Contextful<ExprTycker> {
+  localCtx: LocalContext,
+  localDefs: LocalDefinitions
+) : AbstractTycker<ExprTycker>(localCtx, localDefs) {
   fun unifyReport(lhs: Term, rhs: Term, type: Term?) {
     // This is safe, since we can only modify LocalContexts those we construct
     val result = Conversion(localCtx, localDefs)
@@ -72,7 +71,9 @@ class ExprTycker(
       
       is Expr.Sigma -> TODO()
       
-      is Expr.Let -> checkLet(expr, this::ty)
+      is Expr.Let -> checkLet(expr) {
+        ty(it)
+      }
       
       Expr.BoolTy -> Result.Default(BoolTyTerm, Type)
       Expr.Type -> Result.Default(Type, Type)
@@ -81,12 +82,18 @@ class ExprTycker(
     }
   }
   
+  /**
+   * Check judgement and find a type `T`: [localCtx] |- [expr] : T
+   */
   fun synthesize(expr: Expr): Result<Term> {
     return when (expr) {
       is Expr.PrExpr -> throw IllegalArgumentException("Pre expr")
       
       is Expr.Ref -> when (expr.name) {
-        is FreeBinding -> Result.Default(FreeRefTerm(expr.name), localCtx[expr.name])
+        is FreeBinding -> {
+          val localDefTy = localDefs.getOrNull(expr.name)?.type
+          Result.Default(FreeRefTerm(expr.name), localDefTy ?: localCtx[expr.name])
+        }
       }
       
       is Expr.App -> {
@@ -104,29 +111,27 @@ class ExprTycker(
       is Expr.Sigma -> TODO()
       is Expr.Tup -> TODO()
       
-      is Expr.Let -> checkLet(expr, this::synthesize)
+      is Expr.Let -> checkLet(expr) {
+        synthesize(it)
+      }
       
       is Expr.Bool -> Result.Default(BoolTerm(expr.value), BoolTyTerm)
       Expr.BoolTy, Expr.Type -> ty(expr)
     }
   }
   
-  private fun checkLetBody(term: Term, bind: FreeBinding, bindTy: Term, definedAs: Term): Term {
-    return if (Usage(bind).find(term) > 0) {
-      LetTerm(Term.Param(bind.name, bindTy), definedAs, term.bind(bind))
-    } else term.bind(bind)
-  }
-  
-  private fun checkLet(expr: Expr.Let, checker: (Expr) -> Result<Term>): Result<Term> {
-    val wellBind = checker(expr.param.definedAs)
+  private fun checkLet(expr: Expr.Let, checker: ExprTycker.(Expr) -> Result<Term>): Result<Term> {
+    val wellBindTy = ty(expr.param.type).wellTyped
+    val wellBind = inherit(expr.param.definedAs, wellBindTy)
     val wellBody = subscoped {
-      localCtx[expr.param.bind] = wellBind.type
+      // Should we add to ctx? in case we need Meta in the future?
+      localDefs[expr.param.bind] = wellBind
       checker(expr.body)
     }
     
     // Note that the type of wellBody may refer to [expr.param.bind]
-    val wellBodyTm = checkLetBody(wellBody.wellTyped, expr.param.bind, wellBind.type, wellBind.wellTyped)
-    val wellBodyTy = checkLetBody(wellBody.type, expr.param.bind, wellBind.type, wellBind.wellTyped)
+    val wellBodyTm = LetTerm.make(expr.param.bind, wellBind.type, wellBind.wellTyped, wellBody.wellTyped)
+    val wellBodyTy = LetTerm.make(expr.param.bind, wellBind.type, wellBind.wellTyped, wellBody.type)
     
     return Result.Default(wellBodyTm, wellBodyTy)
   }

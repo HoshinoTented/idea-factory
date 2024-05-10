@@ -4,15 +4,17 @@ import com.github.hoshinotented.syntax.concrete.Expr
 import com.github.hoshinotented.syntax.core.Term
 import com.github.hoshinotented.tyck.ExprTycker
 import com.github.hoshinotented.tyck.ctx.LocalContext
-import kala.collection.mutable.MutableMap
+import com.github.hoshinotented.tyck.ctx.LocalDefinitions
 
 fun resolve(code: Expr): Expr {
   return ExprResolver(Context.Empty).invoke(code)
 }
 
 fun tyck(code: Expr, type: Expr): Term {
-  val wellTy = ExprTycker(LocalContext(null, MutableMap.create())).ty(type).wellTyped
-  val wellTyped = ExprTycker(LocalContext(null, MutableMap.create())).inherit(code, wellTy).wellTyped
+  val tycker = ExprTycker(LocalContext.create(), LocalDefinitions.create())
+  
+  val wellTy = tycker.ty(type).wellTyped
+  val wellTyped = tycker.inherit(code, wellTy).wellTyped
   return wellTyped
 }
 
