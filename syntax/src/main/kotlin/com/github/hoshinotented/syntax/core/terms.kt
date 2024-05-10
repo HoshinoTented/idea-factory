@@ -112,6 +112,19 @@ data class LamTerm(val body: Term) : Term, StableWHNF {
 }
 
 data class AppTerm(val f: Term, val a: Term) : Term {
+  companion object {
+    fun make(f: Term, a: Term): Term {
+      return make(AppTerm(f, a))
+    }
+    
+    fun make(t: AppTerm): Term {
+      return when (t.f) {
+        is LamTerm -> t.f.body.instantiate(t.a)
+        else -> t
+      }
+    }
+  }
+  
   override fun map(f: (Int, Term) -> Term): Term {
     return AppTerm(f(0, this.f), f(0, a))
   }

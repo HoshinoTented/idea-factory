@@ -31,12 +31,11 @@ constructor(override val localDefs: LocalDefinitions = LocalDefinitions(null, Mu
       }
       
       is AppTerm -> {
-        val f = postTerm.f
-        val a = postTerm.a
+        val app = AppTerm.make(postTerm)
         
-        if (f is LamTerm) {
-          invoke(f.body.instantiate(a))
-        } else postTerm
+        if (app !== postTerm) {
+          this(app)
+        } else app
       }
       
       is LetTerm -> {
