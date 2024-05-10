@@ -42,4 +42,15 @@ class Tests {
     val nf = whnf(app)
     assertEquals(BoolTerm(true), nf)
   }
+  
+  @Test
+  fun letUnify0() {
+    val ty = BoolTy
+    val lhs = check(let(bind("f", pi("_" to BoolTy, last = BoolTy), lam("a") { a -> a })) { f ->
+      app(f, True)
+    }, ty)
+    val rhs = check(let(bind("b", BoolTy, False)) { _ -> True }, ty)
+    
+    mkExprTycker().unifyReport(lhs, rhs, null)
+  }
 }

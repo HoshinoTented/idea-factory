@@ -10,8 +10,12 @@ fun resolve(code: Expr): Expr {
   return ExprResolver(Context.Empty).invoke(code)
 }
 
+fun mkExprTycker(): ExprTycker {
+  return ExprTycker(LocalContext.create(), LocalDefinitions.create())
+}
+
 fun tyck(code: Expr, type: Expr): Term {
-  val tycker = ExprTycker(LocalContext.create(), LocalDefinitions.create())
+  val tycker = mkExprTycker()
   
   val wellTy = tycker.ty(type).wellTyped
   val wellTyped = tycker.inherit(code, wellTy).wellTyped

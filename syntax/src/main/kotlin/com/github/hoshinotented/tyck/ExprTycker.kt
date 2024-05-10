@@ -9,17 +9,7 @@ import com.github.hoshinotented.tyck.ctx.LocalDefinitions
 class ExprTycker(
   localCtx: LocalContext,
   localDefs: LocalDefinitions
-) : AbstractTycker<ExprTycker>(localCtx, localDefs) {
-  fun unifyReport(lhs: Term, rhs: Term, type: Term?) {
-    // This is safe, since we can only modify LocalContexts those we construct
-    val result = Conversion(localCtx, localDefs)
-      .check(lhs, rhs, type)
-    
-    if (!result) {
-      throw IllegalStateException("Unable to unify: |- $lhs = $rhs : $type")
-    }
-  }
-  
+) : AbstractTycker<ExprTycker>(localCtx, localDefs), Unifiable {
   private fun badExpr(expr: Expr, type: Term): Nothing {
     throw IllegalStateException("Bad expr: |- $expr : $type")
   }
@@ -152,7 +142,15 @@ class ExprTycker(
     data class Default<out T>(override val wellTyped: T, override val type: Term) : Result<T>
   }
   
+  /// region Overrides
+  
+  override fun mkUnifier(): Conversion {
+    return Conversion(localCtx, localDefs)
+  }
+  
   override fun set(newCtx: LocalContext, newDef: LocalDefinitions): ExprTycker {
     return ExprTycker(newCtx, newDef)
   }
+  
+  /// endregion Overrides
 }
