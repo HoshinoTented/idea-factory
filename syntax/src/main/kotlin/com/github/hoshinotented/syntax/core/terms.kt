@@ -1,9 +1,11 @@
 package com.github.hoshinotented.syntax.core
 
 import com.github.hoshinotented.resolve.FreeBinding
+import com.github.hoshinotented.tyck.LocalDeful
 import com.github.hoshinotented.tyck.Usage
 import com.github.hoshinotented.util.Nested
 import kala.collection.SeqView
+import kala.collection.mutable.MutableMap
 
 sealed interface Term {
   companion object {
@@ -157,6 +159,25 @@ data class LetTerm(override val param: Bind, override val body: Term) : Term, Ne
       return if (Usage(bind).find(body) > 0) {
         return LetTerm(Bind(Term.Param(bind.name, type), definedAs), body.bind(bind))
       } else body
+    }
+    
+    fun <This : LocalDeful<This>> This.rebuild(body: Term): Term {
+      val count = MutableMap.from(Usage.findAll(body))
+      val letBinds = this@rebuild.localDefs.asLetBinds()
+        .view().reversed()
+      var acc = body
+      
+      for (bind in letBinds) {
+        if (count.getOrDefault(bind.first, 0) > 0) {
+          // Usage.findAll have no record like `? -> 0`, and we don't care what the number is
+          count.putAll(Usage.findAll(bind.second.name.type))
+          count.putAll(Usage.findAll(bind.second.definedAs))
+          
+          acc = LetTerm(bind.second, acc.bind(bind.first))
+        }
+      }
+      
+      return acc
     }
   }
   

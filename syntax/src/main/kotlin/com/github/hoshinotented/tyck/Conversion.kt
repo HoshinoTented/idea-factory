@@ -99,9 +99,7 @@ class Conversion(
         }
         
         if (bodyResult) Type else null
-      } else {
-        TODO()
-      }
+      } else null
       
       BoolTyTerm -> if (rhs === BoolTyTerm) return Type else null
       Type -> if (rhs === Type) return Type else null

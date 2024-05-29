@@ -5,11 +5,10 @@ import com.github.hoshinotented.syntax.core.*
 import com.github.hoshinotented.syntax.core.Term.Companion.instantiate
 import com.github.hoshinotented.syntax.core.Term.Companion.map
 import com.github.hoshinotented.tyck.ctx.LocalDefinitions
-import kala.collection.mutable.MutableMap
 
 data class WHNormalizer
 @JvmOverloads
-constructor(override val localDefs: LocalDefinitions = LocalDefinitions(null, MutableMap.create())) : (Term) -> Term,
+constructor(override val localDefs: LocalDefinitions = LocalDefinitions.create()) : (Term) -> Term,
   LocalDeful<WHNormalizer> {
   
   fun whnf(term: Term): Term {
@@ -25,8 +24,7 @@ constructor(override val localDefs: LocalDefinitions = LocalDefinitions(null, Mu
       is FreeRefTerm -> {
         val ref = postTerm.ref
         if (localDefs.contains(ref)) {
-          val subst = localDefs[ref]
-          this(subst.wellTyped)     // TODO: override localDefs and add make a mark
+          this(localDefs[ref].wellTyped)
         } else postTerm
       }
       
@@ -44,9 +42,8 @@ constructor(override val localDefs: LocalDefinitions = LocalDefinitions(null, Mu
           // we dont normalize definedAs for now, see [FreeRefTerm]
           localDefs[bind] = ExprTycker.Result.Default(postTerm.param.definedAs, postTerm.param.name.type)
           val freeBody = this@subscoped(postTerm.body.instantiate(bind))
-          val newDefinedAs = localDefs[bind]        // normalizer may normalize [definedAs] more
           
-          LetTerm.make(bind, newDefinedAs.type, newDefinedAs.wellTyped, freeBody)
+          LetTerm.make(bind, postTerm.param.name.type, postTerm.param.definedAs, freeBody)
         }
       }
       
