@@ -1,13 +1,26 @@
 plugins {
-  kotlin("jvm") version "1.9.23"
+  java
+  kotlin("jvm") version "2.0.10"
 }
 
 group = "org.example"
 version = "1.0-SNAPSHOT"
 
+val javaVersion = 22
+
 allprojects {
+  repositories {
+    mavenCentral()
+  }
+}
+
+dependencies {
+  implementation(kotlin("stdlib"))
+}
+
+subprojects {
   apply {
-    plugin("kotlin")
+    plugin("java")
   }
   
   repositories {
@@ -16,14 +29,13 @@ allprojects {
   
   dependencies {
     implementation("org.glavo.kala:kala-common:0.70.0")
-    testImplementation(kotlin("test"))
+    testImplementation(platform("org.junit:junit-bom:5.11.3"))
+    testImplementation("org.junit.jupiter:junit-jupiter-api")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
   }
-}
-
-tasks.test {
-  useJUnitPlatform()
-}
-
-kotlin {
-  jvmToolchain(21)
+  
+  tasks.test {
+    useJUnitPlatform()
+  }
 }
