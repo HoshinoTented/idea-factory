@@ -1,17 +1,31 @@
 package org.aya.tool.classfile
 
 import kala.collection.Seq
+import kala.collection.immutable.ImmutableSeq
 import java.lang.classfile.AccessFlags
 import java.lang.classfile.ClassBuilder
-import java.lang.constant.ClassDesc
-import java.lang.constant.ConstantDescs
-import java.lang.constant.MethodTypeDesc
+import java.lang.classfile.constantpool.InvokeDynamicEntry
+import java.lang.classfile.constantpool.MethodHandleEntry
+import java.lang.constant.*
+import java.lang.invoke.LambdaMetafactory
 
 class ClassBuilderWrapper(
   val classData: ClassData,
   val builder: ClassBuilder,
 ) {
   private var anyConstructor: Boolean = false
+  private val lambdaBootstrapMethodHandle: MethodHandleEntry by lazy {
+    builder.constantPool().methodHandleEntry(
+      MethodHandleDesc.ofMethod(
+        DirectMethodHandleDesc.Kind.STATIC,
+        LambdaMetafactory::class.java.asDesc(),
+        "metafactory",
+        MTD_LambdaMetafactory_metafactory
+      )
+    )
+  }
+  
+  private var lambdaCounter: Int = 0
   
   fun AccessFlagBuilder.field(type: ClassDesc, name: String): FieldData {
     val mask = AccessFlags.ofField(this@field.mask())
@@ -24,27 +38,84 @@ class ClassBuilderWrapper(
     returnType: ClassDesc,
     methodName: String,
     parameterType: Seq<ClassDesc>,
-    handler: CodeCont,
+    handler: MethodCodeCont,
   ): MethodData {
     val flags = AccessFlags.ofMethod(this@method.mask())
-    return MethodData(
+    val data = MethodData(
       classData.className, methodName, flags,
       MethodTypeDesc.of(returnType, parameterType.asJava()),
       false
-    ).apply { build(builder, handler) }
+    )
+    
+    data.build(this@ClassBuilderWrapper) {
+      handler.invoke(this, ArgumentProvider(data))
+    }
+    
+    return data
   }
   
   fun AccessFlagBuilder.constructor(
     parameterType: Seq<ClassDesc>,
     superConstructor: MethodData,
     superArguments: Seq<CodeCont>,
-    handler: CodeCont,
+    handler: MethodCodeCont,
   ): MethodData {
     anyConstructor = true
     return method(ConstantDescs.CD_void, ConstantDescs.INIT_NAME, parameterType) {
       invokespecial(CodeBuilderWrapper.thisRef, superConstructor, superArguments)
-      handler.invoke(this)
+      handler.invoke(this, it)
     }
+  }
+  
+  private fun lambdaMethodName(): String {
+    val counter = this.lambdaCounter++
+    return "lambda$$counter"
+  }
+  
+  /**
+   * Note that we don't supply the dynamic type signature, cause this project is used for aya-prover while we
+   * need only `() -> Term`.
+   */
+  fun makeLambda(
+    interfaceMethod: MethodData,
+    captureTypes: ImmutableSeq<ClassDesc>,
+    handler: LambdaCodeCont
+  ): InvokeDynamicEntry {
+    val pool = builder.constantPool()
+    
+    // build lambda method
+    val lambdaMethodName = this.lambdaMethodName()
+    val fullParam = captureTypes.view().appendedAll(interfaceMethod.signature.parameterList())
+    
+    val lambdaMethodData = private().static().synthetic().method(
+      interfaceMethod.signature.returnType(),
+      lambdaMethodName,
+      fullParam.toImmutableSeq(),
+    ) {
+      handler.invoke(this@method, LambdaArgumentProvider(captureTypes, interfaceMethod.signature))
+    }
+    
+    // name: the only abstract method that functional interface defines
+    // type: returns the functional interface, parameters are captures
+    val nameAndType = pool.nameAndTypeEntry(
+      interfaceMethod.methodName, MethodTypeDesc.of(
+        interfaceMethod.inClass,
+        captureTypes.toList()
+      )
+    )
+    
+    // 0th: erased function signature
+    // 1st: the function name to the lambda
+    // 2nd: function signature
+    val bsm = pool.bsmEntry(
+      lambdaBootstrapMethodHandle, listOf(
+        interfaceMethod.signature,
+        lambdaMethodData.makeMethodHandle(),
+        interfaceMethod.signature,
+      ).map(pool::loadableConstantEntry)
+    )
+    
+    return pool.invokeDynamicEntry(bsm, nameAndType)
   }
   
   /**
@@ -61,4 +132,12 @@ class ClassBuilderWrapper(
   fun done() {
     check(anyConstructor) { "Please make at least one constructor" }
   }
+}
+
+fun ClassBuilderWrapper.main(handler: CodeBuilderWrapper.(CodeBuilderWrapper.ExprCont) -> Unit): MethodData {
+  return public().static().final()
+    .method(ConstantDescs.CD_void, MAIN_NAME, Seq.of(Array<String>::class.java.asDesc())) {
+      val args = it.arg(0)
+      handler.invoke(this, args)
+    }
 }

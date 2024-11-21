@@ -74,6 +74,8 @@ data class MethodData(
   val signature: MethodTypeDesc,
   val isInterface: Boolean,
 ) {
+  val isStatic get() = flags.has(AccessFlag.STATIC)
+  
   fun kind(): DirectMethodHandleDesc.Kind {
     if (flags.has(AccessFlag.STATIC))
       return if (isInterface) DirectMethodHandleDesc.Kind.INTERFACE_STATIC
@@ -94,13 +96,13 @@ data class MethodData(
     )
   }
   
-  fun build(cb: ClassBuilder, build: CodeCont) {
-    val isStatic = flags.has(AccessFlag.STATIC)
+  fun build(cb: ClassBuilderWrapper, build: CodeCont) {
+    val isStatic = isStatic
     val usedSlot = (if (isStatic) 0 else 1) + signature.parameterCount()
-    cb.withMethodBody(
+    cb.builder.withMethodBody(
       methodName, signature, flags.flagsMask()
     ) { codeBuilder ->
-      build.invoke(CodeBuilderWrapper(codeBuilder, VariablePool(usedSlot), !isStatic))
+      build.invoke(CodeBuilderWrapper(cb, codeBuilder, VariablePool(usedSlot), !isStatic))
     }
   }
   

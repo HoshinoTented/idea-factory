@@ -1,8 +1,13 @@
 import java.util.Objects;
+import java.util.function.Function;
 
 public class CodeTest {
   interface Interface {
     void out();
+  }
+
+  public static class Nested {
+    public int j = 255;
   }
 
   public int i = 114514;
@@ -23,7 +28,8 @@ public class CodeTest {
     char c = '1';
     byte[] ba = {42};
     long[] la = {42};
-    Object[] oa = {null};
+    Object[] oa = {new Object()};
+    Function<Integer, String> itoa = ii -> Long.toString(ii + j);
     Objects.requireNonNull(byte.class.toString());
   }
 }

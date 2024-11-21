@@ -2,12 +2,19 @@ package org.aya.tool.classfile
 
 import kala.collection.Seq
 import kala.collection.immutable.ImmutableArray
+import kala.collection.immutable.ImmutableSeq
+import org.jetbrains.annotations.Contract
 import java.lang.classfile.CodeBuilder
-import java.lang.classfile.TypeKind
+import java.lang.constant.ClassDesc
 import java.lang.constant.DirectMethodHandleDesc
 import java.lang.reflect.AccessFlag
 
-class CodeBuilderWrapper(val builder: CodeBuilder, val pool: VariablePool, private val hasThis: Boolean) {
+class CodeBuilderWrapper constructor(
+  private val inClassFile: ClassBuilderWrapper,
+  val builder: CodeBuilder,
+  val pool: VariablePool,
+  private val hasThis: Boolean
+) {
   /// region invoke
   private enum class InvokeKind {
     Interface,
@@ -20,31 +27,31 @@ class CodeBuilderWrapper(val builder: CodeBuilder, val pool: VariablePool, priva
     theObject: CodeCont,
     theMethod: MethodData,
     args: Seq<CodeCont>,
-  ): CodeBuilderWrapper {
-    return invoke(InvokeKind.Interface, theObject, theMethod, args)
+  ) {
+    invoke(InvokeKind.Interface, theObject, theMethod, args)
   }
   
   fun invokevirtual(
     theObject: CodeCont,
     theMethod: MethodData,
     args: Seq<CodeCont>,
-  ): CodeBuilderWrapper {
-    return invoke(InvokeKind.Virtual, theObject, theMethod, args)
+  ) {
+    invoke(InvokeKind.Virtual, theObject, theMethod, args)
   }
   
   fun invokespecial(
     theObject: CodeCont,
     theMethod: MethodData,
     args: Seq<CodeCont>,
-  ): CodeBuilderWrapper {
-    return invoke(InvokeKind.Special, theObject, theMethod, args)
+  ) {
+    invoke(InvokeKind.Special, theObject, theMethod, args)
   }
   
   fun invokestatic(
     theMethod: MethodData,
     args: Seq<CodeCont>,
-  ): CodeBuilderWrapper {
-    return invoke(InvokeKind.Static, null, theMethod, args)
+  ) {
+    invoke(InvokeKind.Static, null, theMethod, args)
   }
   
   private fun invoke(
@@ -76,18 +83,20 @@ class CodeBuilderWrapper(val builder: CodeBuilder, val pool: VariablePool, priva
   
   /// region method helper
   
-  data class MethodRef(val data: MethodData, val obj: CodeBuilderWrapper.() -> Unit)
+  data class MethodRef(val data: MethodData, val obj: CodeCont)
   
+  @Contract(pure = true)
   fun MethodData.of(obj: CodeBuilderWrapper.() -> Unit): MethodRef {
     assert(!this.flags.has(AccessFlag.STATIC))
     return MethodRef(this@of, obj)
   }
   
-  fun MethodRef.invoke(vararg args: CodeCont): CodeCont {
+  @Contract(pure = true)
+  fun MethodRef.invoke(vararg args: CodeCont): ExprCont {
     val argSeq = ImmutableArray.Unsafe.wrap<CodeCont>(args)
-    return when (data.kind()) {
+    val cont: CodeCont = when (data.kind()) {
       DirectMethodHandleDesc.Kind.VIRTUAL -> {
-        { invokespecial(obj, data, argSeq) }
+        { invokevirtual(obj, data, argSeq) }
       }
       
       DirectMethodHandleDesc.Kind.INTERFACE_VIRTUAL -> {
@@ -102,6 +111,21 @@ class CodeBuilderWrapper(val builder: CodeBuilder, val pool: VariablePool, priva
       
       else -> TODO("unreachable")
     }
+    
+    return ExprCont(this.data.signature.returnType(), cont)
+  }
+  
+  /**
+   * Invoke a [CodeCont] immediately
+   */
+  operator fun CodeCont.unaryPlus() {
+    this@unaryPlus.invoke(this@CodeBuilderWrapper)
+  }
+  
+  fun MethodData.nu(vararg args: CodeCont): ExprCont = ExprCont(this.inClass) {
+    builder.new_(this@nu.inClass)
+    // invoke constructor
+    invokespecial({ builder.dup() }, this@nu, ImmutableArray.Unsafe.wrap(args))
   }
   
   /// endregion method helper
@@ -111,9 +135,10 @@ class CodeBuilderWrapper(val builder: CodeBuilder, val pool: VariablePool, priva
   /**
    * A "reference" to a field of certain object, the instruction is wrote until the command is given.
    */
-  data class FieldRef(val data: FieldData, val obj: CodeBuilderWrapper.() -> Unit)
+  data class FieldRef(val data: FieldData, val obj: CodeCont)
   
-  fun FieldData.of(obj: CodeBuilderWrapper.() -> Unit): FieldRef {
+  @Contract(pure = true)
+  fun FieldData.of(obj: CodeCont): FieldRef {
     assert(!this.flags.has(AccessFlag.STATIC))
     return FieldRef(this@of, obj)
   }
@@ -123,40 +148,77 @@ class CodeBuilderWrapper(val builder: CodeBuilder, val pool: VariablePool, priva
     builder.putstatic(this.owner, this.name, this.returnType)
   }
   
+  @Contract(pure = true)
+  fun FieldData.get(): ExprCont = ExprCont(returnType) {
+    builder.getstatic(owner, name, returnType)
+  }
+  
   fun FieldRef.set(value: CodeCont) {
     obj.invoke(this@CodeBuilderWrapper)
     value.invoke(this@CodeBuilderWrapper)
     with(this.data) {
-      builder.putfield(this.owner, this.name, this.returnType)
+      builder.putfield(owner, name, returnType)
     }
+  }
+  
+  @Contract(pure = true)
+  fun FieldRef.get(): ExprCont = ExprCont(data.returnType) {
+    obj.invoke(this@CodeBuilderWrapper)
+    builder.getfield(data.owner, data.name, data.returnType)
   }
   
   /// endregion field helper
   
   /// region easy argument
   
-  fun arg(nth: Int): Int {
-    return nth + if (hasThis) 1 else 0
+  /**
+   * A [CodeCont] that push an expression to the stack, with type information [type]
+   */
+  data class ExprCont(val type: ClassDesc, val cont: CodeCont) : (CodeBuilderWrapper) -> Unit {
+    override fun invoke(p1: CodeBuilderWrapper) {
+      cont.invoke(p1)
+    }
   }
   
-  fun aarg(nth: Int): CodeCont = argInstruction(TypeKind.ReferenceType, nth)
-  fun iarg(nth: Int): CodeCont = argInstruction(TypeKind.IntType, nth)
+  @get:Contract(pure = true)
+  val self: ExprCont
+    get() = if (hasThis) ExprCont(inClassFile.classData.className, thisRef) else {
+      throw IllegalStateException("static")
+    }
   
-  fun argInstruction(kind: TypeKind, nth: Int): CodeCont = {
-    builder.loadInstruction(kind, arg(nth))
+  fun subscoped(newPool: VariablePool): CodeBuilderWrapper {
+    return CodeBuilderWrapper(inClassFile, builder, newPool, hasThis)
   }
   
-  val self: CodeCont = if (hasThis) thisRef else {
-    throw IllegalStateException("static")
+  inline fun <R> subscoped(block: CodeBuilderWrapper.() -> R): R {
+    return this.pool.subscoped {
+      subscoped(it).block()
+    }
   }
   
   /// endregion easy argument
   
-  companion object {
-    fun aref(slot: Int): CodeCont {
-      return { builder.aload(slot) }
-    }
+  /// region lambda helper
+  
+  fun MethodData.lambda(vararg captures: ExprCont, handler: LambdaCodeCont): ExprCont {
+    val entry = inClassFile.makeLambda(
+      this,
+      ImmutableSeq.from(captures.map { it.type }),
+      handler
+    )
     
+    return ExprCont(this.inClass) {
+      ImmutableSeq.from(captures).view().reversed().forEach {
+        it.cont.invoke(this@CodeBuilderWrapper)
+      }
+      
+      builder.invokedynamic(entry)
+    }
+  }
+  
+  /// endregion
+  
+  companion object {
     val thisRef: CodeCont = { builder.aload(0) }
   }
 }

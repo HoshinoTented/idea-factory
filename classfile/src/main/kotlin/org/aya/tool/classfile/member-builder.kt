@@ -17,6 +17,10 @@ value class AccessFlagBuilder(val flags: SeqView<AccessFlag>) {
     return AccessFlagBuilder(flags.appended(AccessFlag.INTERFACE))
   }
   
+  fun synthetic(): AccessFlagBuilder {
+    return AccessFlagBuilder(flags.appended(AccessFlag.SYNTHETIC))
+  }
+  
   fun mask(): Int {
     return flags.fold(0) { acc, flag ->
       acc or flag.mask()
@@ -26,4 +30,8 @@ value class AccessFlagBuilder(val flags: SeqView<AccessFlag>) {
 
 fun public(): AccessFlagBuilder {
   return AccessFlagBuilder(SeqView.of(AccessFlag.PUBLIC))
+}
+
+fun private(): AccessFlagBuilder {
+  return AccessFlagBuilder(SeqView.of(AccessFlag.PRIVATE))
 }
