@@ -37,7 +37,7 @@ class CodeBuilderWrapper constructor(
       f.invoke(this)
     }
     
-    val owner = theMethod.inClass.className
+    val owner = theMethod.inClass.classDesc
     val name = theMethod.methodName
     val type = theMethod.signature
     
@@ -103,8 +103,8 @@ class CodeBuilderWrapper constructor(
   }
   
   @Contract(pure = true)
-  fun MethodData.nu(vararg args: CodeCont): ExprCont = ExprCont(this.inClass.className) {
-    builder.new_(this@nu.inClass.className)
+  fun MethodData.nu(vararg args: CodeCont): ExprCont = ExprCont(this.inClass.classDesc) {
+    builder.new_(this@nu.inClass.classDesc)
     // invoke constructor
     invoke(InvokeKind.Special, { builder.dup() }, this@nu, ImmutableArray.Unsafe.wrap(args))
   }
@@ -175,18 +175,20 @@ class CodeBuilderWrapper constructor(
       assert(isBoolean(type))
       return ExprCont(ConstantDescs.CD_boolean) {
         invoke(this)
-        builder.ifThenElse(Opcode.IFNE, {
-          // if cont == true
-          builder.iconst_0()
-        }, {
-          // if cont == false
-          builder.iconst_1()
-        })
+        builder.ifThenElse(Opcode.IFNE, { +nein }, { +ja })
+      }
+    }
+    
+    fun isNull(): ExprCont {
+      assert(type.isClassOrInterface)
+      return ExprCont(ConstantDescs.CD_boolean) {
+        invoke(this)
+        builder.ifThenElse(Opcode.IFNULL, { +ja }, { +nein })
       }
     }
     
     fun instanceof(type: ClassDesc): ExprCont {
-      assert(isObject(type))
+      assert(type.isClassOrInterface)
       return ExprCont(ConstantDescs.CD_boolean) {
         invoke(this)
         builder.instanceof_(type)
@@ -207,7 +209,7 @@ class CodeBuilderWrapper constructor(
   
   @get:Contract(pure = true)
   val self: ExprCont by lazy {
-    if (hasThis) ExprCont(inClassFile.classData.className, thisRef) else {
+    if (hasThis) ExprCont(inClassFile.classData.classDesc, thisRef) else {
       throw IllegalStateException("static")
     }
   }
@@ -301,7 +303,7 @@ class CodeBuilderWrapper constructor(
       handler
     )
     
-    return ExprCont(this.inClass.className) {
+    return ExprCont(this.inClass.classDesc) {
       ImmutableSeq.from(captures).view().reversed().forEach {
         it.invoke(this@CodeBuilderWrapper)
       }

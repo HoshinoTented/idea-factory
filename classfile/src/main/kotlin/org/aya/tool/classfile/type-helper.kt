@@ -55,13 +55,6 @@ fun isInteger(desc: ClassDesc): Boolean {
 }
 
 /**
- * Check whether a type represents a class or an array
- */
-fun isObject(desc: ClassDesc): Boolean {
-  return TypeKind.fromDescriptor(desc.descriptorString()) === TypeKind.ReferenceType
-}
-
-/**
  * Check whether two type matches, fail if mismatch, true if matches and not `void`, false if both `void`
  */
 fun assertTypeMatch(lhs: ClassDesc, rhs: ClassDesc): Boolean {

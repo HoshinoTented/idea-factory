@@ -1,18 +1,23 @@
 package org.aya.tool.classfile
 
 import kala.collection.Seq
-import kala.collection.immutable.ImmutableArray
 import kala.collection.immutable.ImmutableSeq
 import java.lang.classfile.AccessFlags
 import java.lang.classfile.ClassBuilder
+import java.lang.classfile.ClassFile
+import java.lang.classfile.attribute.InnerClassInfo
+import java.lang.classfile.attribute.InnerClassesAttribute
 import java.lang.classfile.constantpool.InvokeDynamicEntry
 import java.lang.classfile.constantpool.MethodHandleEntry
 import java.lang.constant.*
 import java.lang.invoke.LambdaMetafactory
+import java.lang.reflect.AccessFlag
+import java.util.*
 
 class ClassBuilderWrapper(
   val classData: ClassData,
   val builder: ClassBuilder,
+  internal val classOutput: DefaultClassOutput
 ) {
   private var anyConstructor: Boolean = false
   private val lambdaBootstrapMethodHandle: MethodHandleEntry by lazy {
@@ -30,7 +35,7 @@ class ClassBuilderWrapper(
   
   fun AccessFlagBuilder.field(type: ClassDesc, name: String): FieldData {
     val mask = AccessFlags.ofField(this@field.mask())
-    return FieldData(classData.className, mask, type, name).apply {
+    return FieldData(classData.classDesc, mask, type, name).apply {
       build(builder)
     }
   }
@@ -141,6 +146,27 @@ class ClassBuilderWrapper(
     }
   }
   
+  /**
+   * We support static inner class for now
+   */
+  fun InnerClassData.nestedClass(
+    file: ClassFile,
+    handler: ClassBuilderWrapper.() -> Unit
+  ) {
+    val attribute = InnerClassesAttribute.of(
+      InnerClassInfo.of(
+        this.classDesc, Optional.of(this@ClassBuilderWrapper.classData.classDesc),
+        Optional.of(this.className), this.flags.flagsMask() or AccessFlag.STATIC.mask()
+      )
+    )
+    
+    this@ClassBuilderWrapper.builder.with(attribute)
+    this.build(file, this@ClassBuilderWrapper.classOutput) {
+      builder.with(attribute)
+      handler.invoke(this)
+    }
+  }
+  
   private fun lambdaMethodName(): String {
     val counter = this.lambdaCounter++
     return "lambda$$counter"
@@ -173,7 +199,7 @@ class ClassBuilderWrapper(
     // type: returns the functional interface, parameters are captures
     val nameAndType = pool.nameAndTypeEntry(
       interfaceMethod.methodName, MethodTypeDesc.of(
-        interfaceMethod.inClass.className,
+        interfaceMethod.inClass.classDesc,
         captureTypes.toList()
       )
     )

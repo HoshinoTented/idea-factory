@@ -9,7 +9,7 @@ public class CodeTest {
     void out();
   }
 
-  public static class Nested {
+  public static final class Nested {
     public int j = 255;
   }
 

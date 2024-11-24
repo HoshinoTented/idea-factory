@@ -1,6 +1,7 @@
 package org.aya.tool.classfile
 
 import kala.collection.immutable.ImmutableSeq
+import kala.collection.mutable.MutableMap
 import java.lang.classfile.*
 import java.lang.classfile.constantpool.ConstantPoolBuilder
 import java.lang.classfile.constantpool.MethodRefEntry
@@ -11,24 +12,39 @@ import java.lang.reflect.AccessFlag
 
 interface ClassData {
   val flags: AccessFlags
-  val className: ClassDesc
+  val classDesc: ClassDesc
   val interfaces: ImmutableSeq<ClassData>
   val superclass: ClassData
   
-  fun build(file: ClassFile, handler: ClassBuilderWrapper.() -> Unit): ByteArray {
-    return file.build(className) { cb: ClassBuilder ->
-      cb.withFlags(flags.flagsMask())
+  /**
+   * The simple name of this class, note that it might not be the class file name because there is nested class.
+   */
+  val className: String get() = classDesc.displayName()
+  
+  fun build(file: ClassFile, parent: DefaultClassOutput?, handler: ClassBuilderWrapper.() -> Unit): ClassOutput {
+    val output: DefaultClassOutput = parent ?: DefaultClassOutput(MutableMap.create())
+    val extraMask = if (!flags.has(AccessFlag.INTERFACE)) AccessFlag.SUPER.mask() else 0x0
+    val primaryOutput = file.build(classDesc) { cb: ClassBuilder ->
+      cb.withFlags(flags.flagsMask() or extraMask)
       
       val superclass = superclass
       val interfaces = interfaces
-      cb.withSuperclass(superclass.className)
+      cb.withSuperclass(superclass.classDesc)
       
-      if (interfaces.isNotEmpty) cb.withInterfaceSymbols(interfaces.map { it.className }.asJava())
+      if (interfaces.isNotEmpty) cb.withInterfaceSymbols(interfaces.map { it.classDesc }.asJava())
       
-      val cbw = ClassBuilderWrapper(this, cb)
+      val cbw = ClassBuilderWrapper(this, cb, output)
       handler.invoke(cbw)
       cbw.done()
     }
+    
+    output.outputs.put(classDesc.displayName(), primaryOutput)
+    
+    return output
+  }
+  
+  fun build(file: ClassFile, handler: ClassBuilderWrapper.() -> Unit): ClassOutput {
+    return build(file, null, handler)
   }
   
   fun makeConstructorRefEntry(
@@ -37,7 +53,7 @@ interface ClassData {
   ): MethodRefEntry {
     val pool = builder.constantPool()
     return pool.methodRefEntry(
-      className,
+      classDesc,
       ConstantDescs.INIT_NAME,
       MethodTypeDesc.of(ConstantDescs.CD_void, *parameterType)
     )
@@ -66,16 +82,16 @@ fun ClassData(clazz: Class<*>): ClassData {
   return ClassDataWrapper(clazz)
 }
 
-@JvmRecord
-data class ClassDataImpl(
+
+class ClassDataImpl(
   override val flags: AccessFlags,
-  override val className: ClassDesc,
+  override val classDesc: ClassDesc,
   override val interfaces: ImmutableSeq<ClassData>,
   override val superclass: ClassData,
 ) : ClassData
 
-data class ClassDataWrapper(val clazz: Class<*>) : ClassData {
-  override val className: ClassDesc by lazy {
+class ClassDataWrapper(val clazz: Class<*>) : ClassData {
+  override val classDesc: ClassDesc by lazy {
     clazz.asDesc()
   }
   
@@ -93,6 +109,32 @@ data class ClassDataWrapper(val clazz: Class<*>) : ClassData {
   
   override val superclass: ClassData by lazy {
     ClassDataWrapper(clazz.superclass)
+  }
+}
+
+interface InnerClassData : ClassData {
+  val outer: ClassData
+  override val className: String
+}
+
+fun ClassBuilderWrapper.InnerClassData(
+  flags: AccessFlagBuilder,
+  className: String,
+  superclass: ClassData = ConstantData.CD_Object,
+  interfaces: ImmutableSeq<ClassData> = ImmutableSeq.empty()
+): InnerClassData {
+  return DefaultInnerClassData(AccessFlags.ofClass(flags.mask()), this.classData, className, superclass, interfaces)
+}
+
+class DefaultInnerClassData(
+  override val flags: AccessFlags,
+  override val outer: ClassData,
+  override val className: String,
+  override val superclass: ClassData,
+  override val interfaces: ImmutableSeq<ClassData>,
+) : InnerClassData {
+  override val classDesc: ClassDesc by lazy {
+    outer.classDesc.nested(className)
   }
 }
 
@@ -138,7 +180,7 @@ interface MethodData {
   fun makeMethodHandle(): DirectMethodHandleDesc {
     return MethodHandleDesc.ofMethod(
       kind(),
-      inClass.className,
+      inClass.classDesc,
       methodName,
       signature
     )
@@ -155,7 +197,7 @@ interface MethodData {
   }
   
   fun makeMethodRefEntry(builder: ConstantPoolBuilder): MethodRefEntry {
-    return builder.methodRefEntry(inClass.className, methodName, signature)
+    return builder.methodRefEntry(inClass.classDesc, methodName, signature)
   }
 }
 
@@ -169,8 +211,7 @@ fun MethodData(
   return MethodDataImpl(inClass, methodName, flags, signature, isInterface)
 }
 
-@JvmRecord
-data class MethodDataImpl(
+class MethodDataImpl(
   override val inClass: ClassData,
   override val methodName: String,
   override val flags: AccessFlags,

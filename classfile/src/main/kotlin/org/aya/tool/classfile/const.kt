@@ -27,3 +27,7 @@ val MD_Object_new: MethodData = MethodData(
   ConstantDescs.MTD_void,
   false
 )
+
+object ConstantData {
+  val CD_Object = ClassData(Object::class.java)
+}

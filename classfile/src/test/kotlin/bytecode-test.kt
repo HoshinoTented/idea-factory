@@ -52,9 +52,13 @@ class BytecodeTest {
       true
     )
     
-    val bytecode = ClassData(ClassDesc.of("SomeMain")).build(ClassFile.of()) {
-      val SomeMain = this.classData.className
+    val output = ClassData(ClassDesc.of("SomeMain")).build(ClassFile.of()) {
+      val SomeMain = this.classData.classDesc
       builder.withVersion(64, 0)
+      
+      InnerClassData(public(), "ManyMain").nestedClass(ClassFile.of()) {
+        defaultConstructor()
+      }
       
       val field_foo = public().field(ConstantDescs.CD_String, "foo")
       
@@ -107,6 +111,6 @@ class BytecodeTest {
       }
     }
     
-    Files.write(GEN_DIR.resolve("SomeMain.class"), bytecode)
+    output.writeTo(GEN_DIR)
   }
 }
