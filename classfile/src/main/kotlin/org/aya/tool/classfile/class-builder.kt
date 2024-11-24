@@ -80,21 +80,12 @@ class ClassBuilderWrapper(
   fun AccessFlagBuilder.method(
     returnType: ClassDesc,
     methodName: String,
-    vararg parameterTypes: ClassDesc,
-    handler: MethodCodeCont,
-  ): MethodData {
-    return method(returnType, methodName, ImmutableArray.Unsafe.wrap(parameterTypes), handler)
-  }
-  
-  fun AccessFlagBuilder.method(
-    returnType: ClassDesc,
-    methodName: String,
     parameterType: Seq<ClassDesc>,
     handler: MethodCodeCont,
   ): MethodData {
     val flags = AccessFlags.ofMethod(this@method.mask())
     val data = MethodData(
-      classData.className, methodName, flags,
+      classData, methodName, flags,
       MethodTypeDesc.of(returnType, parameterType.asJava()),
       false
     )
@@ -182,7 +173,7 @@ class ClassBuilderWrapper(
     // type: returns the functional interface, parameters are captures
     val nameAndType = pool.nameAndTypeEntry(
       interfaceMethod.methodName, MethodTypeDesc.of(
-        interfaceMethod.inClass,
+        interfaceMethod.inClass.className,
         captureTypes.toList()
       )
     )

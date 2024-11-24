@@ -5,8 +5,10 @@ import kala.collection.immutable.ImmutableArray
 import kala.collection.immutable.ImmutableSeq
 import org.jetbrains.annotations.Contract
 import java.lang.classfile.CodeBuilder
+import java.lang.classfile.Opcode
 import java.lang.classfile.TypeKind
 import java.lang.constant.ClassDesc
+import java.lang.constant.ConstantDescs
 import java.lang.constant.DirectMethodHandleDesc
 import java.lang.reflect.AccessFlag
 
@@ -66,7 +68,7 @@ class CodeBuilderWrapper constructor(
       f.invoke(this)
     }
     
-    val owner = theMethod.inClass
+    val owner = theMethod.inClass.className
     val name = theMethod.methodName
     val type = theMethod.signature
     
@@ -88,12 +90,12 @@ class CodeBuilderWrapper constructor(
   
   @Contract(pure = true)
   fun MethodData.of(obj: CodeBuilderWrapper.() -> Unit): MethodRef {
-    assert(!isStatic)
+    assert(!isStatic) { "static" }
     return MethodRef(this@of, obj)
   }
   
   fun MethodData.invoke(vararg args: CodeCont): ExprCont {
-    assert(isStatic)
+    assert(isStatic) { "not static" }
     val argSeq = ImmutableArray.Unsafe.wrap<CodeCont>(args)
     return ExprCont(this.signature.returnType()) {
       invokestatic(this@invoke, argSeq)
@@ -111,6 +113,7 @@ class CodeBuilderWrapper constructor(
       DirectMethodHandleDesc.Kind.INTERFACE_VIRTUAL -> {
         { invokeinterface(obj, data, argSeq) }
       }
+      
       DirectMethodHandleDesc.Kind.SPECIAL,
       DirectMethodHandleDesc.Kind.INTERFACE_SPECIAL -> {
         { invokespecial(obj, data, argSeq) }
@@ -130,8 +133,9 @@ class CodeBuilderWrapper constructor(
     this@unaryPlus.invoke(this@CodeBuilderWrapper)
   }
   
-  fun MethodData.nu(vararg args: CodeCont): ExprCont = ExprCont(this.inClass) {
-    builder.new_(this@nu.inClass)
+  @Contract(pure = true)
+  fun MethodData.nu(vararg args: CodeCont): ExprCont = ExprCont(this.inClass.className) {
+    builder.new_(this@nu.inClass.className)
     // invoke constructor
     invokespecial({ builder.dup() }, this@nu, ImmutableArray.Unsafe.wrap(args))
   }
@@ -141,6 +145,7 @@ class CodeBuilderWrapper constructor(
       builder.return_()
     } else {
       val ty = assertValidType(value.type)
+      +value
       builder.returnInstruction(TypeKind.fromDescriptor(ty.descriptorString()))
     }
   }
@@ -186,13 +191,46 @@ class CodeBuilderWrapper constructor(
   
   /// endregion field helper
   
-  /// region easy argument
+  /// region expression helper
+  
+  interface ExprCont : (CodeBuilderWrapper) -> Unit {
+    companion object {
+      fun ofVoid(cont: CodeCont): ExprCont {
+        return ExprCont(ConstantDescs.CD_void, cont)
+      }
+    }
+    
+    val type: ClassDesc
+    
+    operator fun not(): ExprCont {
+      assert(isBoolean(type))
+      return ExprCont(ConstantDescs.CD_boolean) {
+        invoke(this)
+        builder.ifThenElse(Opcode.IFNE, {
+          // if cont == true
+          builder.iconst_0()
+        }, {
+          // if cont == false
+          builder.iconst_1()
+        })
+      }
+    }
+    
+    fun instanceof(type: ClassDesc): ExprCont {
+      assert(isObject(type))
+      return ExprCont(ConstantDescs.CD_boolean) {
+        invoke(this)
+        builder.instanceof_(type)
+      }
+    }
+  }
+  
   
   /**
    * A [CodeCont] that push an expression to the stack, with type information [type].
    * Note that [type] may not be a valid type, e.g. `void`.
    */
-  data class ExprCont(val type: ClassDesc, val cont: CodeCont) : (CodeBuilderWrapper) -> Unit {
+  data class ExprContImpl(override val type: ClassDesc, val cont: CodeCont) : ExprCont {
     override fun invoke(p1: CodeBuilderWrapper) {
       cont.invoke(p1)
     }
@@ -205,17 +243,85 @@ class CodeBuilderWrapper constructor(
     }
   }
   
-  fun subscoped(newPool: VariablePool): CodeBuilderWrapper {
+  @Contract(pure = true)
+  fun nil(ty: ClassDesc) = ExprCont(ty, nilRef)
+  
+  fun subscoped(builder: CodeBuilder, newPool: VariablePool): CodeBuilderWrapper {
     return CodeBuilderWrapper(inClassFile, builder, newPool, hasThis)
   }
   
-  inline fun <R> subscoped(block: CodeBuilderWrapper.() -> R): R {
+  inline fun <R> subscoped(builder: CodeBuilder, block: CodeBuilderWrapper.() -> R): R {
     return this.pool.subscoped {
-      subscoped(it).block()
+      subscoped(builder, it).block()
     }
   }
   
-  /// endregion easy argument
+  /// endregion argument helper
+  
+  /// region local variable helper
+  
+  data class Variable(override val type: ClassDesc, val slot: Int) : ExprCont {
+    init {
+      assertValidType(type)
+    }
+    
+    override fun invoke(p1: CodeBuilderWrapper) {
+      p1.builder.loadInstruction(type.typeKind, slot)
+    }
+  }
+  
+  fun let(type: ClassDesc): Variable = Variable(type, pool.acquire())
+  
+  @Contract(pure = true)
+  fun Variable.get(): ExprCont = this
+  
+  @Contract(pure = true)
+  fun Variable.getArr(idx: Int): ExprCont {
+    val ty = type.componentType()
+      ?: throw AssertionError("not an array")
+    
+    return ExprCont(ty) {
+      builder.iconst(idx)
+      builder.arrayLoadInstruction(ty.typeKind)
+    }
+  }
+  
+  fun Variable.set(bool: Boolean) {
+    isBoolean(type)
+    
+    if (bool) {
+      builder.iconst_1()
+    } else {
+      builder.iconst_0()
+    }
+    
+    builder.istore(slot)
+  }
+  
+  fun Variable.set(i: Int) {
+    isInteger(type)
+    
+    builder.iconst(i)
+    builder.istore(slot)
+  }
+  
+  fun Variable.set(value: ExprCont) {
+    // variable type is never `void`, so we don't have to check the result
+    assertTypeMatch(type, value.type)
+    value.invoke(this@CodeBuilderWrapper)
+    builder.storeInstruction(type.typeKind, slot)
+  }
+  
+  fun Variable.setArr(idx: Int, value: ExprCont) {
+    val ty = type.componentType()
+      ?: throw AssertionError("not an array")
+    
+    builder.iconst(idx)
+    value.invoke(this@CodeBuilderWrapper)
+    builder.arrayStoreInstruction(ty.typeKind)
+  }
+  
+  /// endregion local variable helper
   
   /// region lambda helper
   
@@ -226,9 +332,9 @@ class CodeBuilderWrapper constructor(
       handler
     )
     
-    return ExprCont(this.inClass) {
+    return ExprCont(this.inClass.className) {
       ImmutableSeq.from(captures).view().reversed().forEach {
-        it.cont.invoke(this@CodeBuilderWrapper)
+        it.invoke(this@CodeBuilderWrapper)
       }
       
       builder.invokedynamic(entry)
@@ -237,7 +343,81 @@ class CodeBuilderWrapper constructor(
   
   /// endregion
   
+  /// region if helper
+  
+  data class CondExprCont(val opcode: Opcode, val args: ImmutableSeq<ExprCont>)
+  data class IfThenElseBlock(val ifThenBlock: IfThenBlock, val elseBlock: ExprCont)
+  
+  data class IfThenBlock(val cond: ExprCont, val thenBlock: ExprCont) {
+    @Contract(pure = true)
+    fun orElse(elseBlock: CodeCont): IfThenElseBlock {
+      return orElse(ExprCont.ofVoid(elseBlock))
+    }
+    
+    @Contract(pure = true)
+    fun orElse(elseBlock: ExprCont): IfThenElseBlock {
+      return IfThenElseBlock(this, elseBlock)
+    }
+  }
+  
+  fun IfThenBlock.end() {
+    cond.invoke(this@CodeBuilderWrapper)
+    builder.ifThen {
+      subscoped(it) {
+        thenBlock.invoke(this@subscoped)
+      }
+    }
+  }
+  
+  @Contract(pure = true)
+  fun IfThenElseBlock.expr(): ExprCont {
+    val ifType = ifThenBlock.thenBlock.type
+    val elseType = elseBlock.type
+    
+    if (!assertTypeMatch(ifType, elseType)) {
+      throw AssertionError("blocks return void, use `.end()` instead.")
+    }
+    
+    return ExprCont(elseBlock.type) {
+      this@expr.end()
+    }
+  }
+  
+  fun IfThenElseBlock.end() {
+    ifThenBlock.cond.invoke(this@CodeBuilderWrapper)
+    val thenBlock = ifThenBlock.thenBlock
+    builder.ifThenElse({
+      subscoped(it) {
+        thenBlock.invoke(this@subscoped)
+      }
+    }, {
+      subscoped(it) {
+        elseBlock.invoke(this@subscoped)
+      }
+    })
+  }
+  
+  @Contract(pure = true)
+  fun ifThen(cond: ExprCont, thenBlock: ExprCont): IfThenBlock {
+    assert(isBoolean(cond.type))
+    return IfThenBlock(cond, thenBlock)
+  }
+  
+  @Contract(pure = true)
+  fun ifThen(cond: ExprCont, thenBlock: CodeCont): IfThenBlock {
+    return ifThen(cond, ExprCont.ofVoid(thenBlock))
+  }
+  
+  /// endregion if helper
+  
   companion object {
     val thisRef: CodeCont = { builder.aload(0) }
+    val nilRef: CodeCont = { builder.aconst_null() }
+    val ya: ExprCont = ExprCont(ConstantDescs.CD_boolean) { builder.iconst(1) }
+    val nein: ExprCont = ExprCont(ConstantDescs.CD_boolean) { builder.iconst(0) }
+    
+    fun ExprCont(type: ClassDesc, cont: CodeCont): ExprCont {
+      return ExprContImpl(type, cont)
+    }
   }
 }

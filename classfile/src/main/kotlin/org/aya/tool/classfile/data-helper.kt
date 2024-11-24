@@ -1,15 +1,14 @@
 package org.aya.tool.classfile
 
 import java.lang.classfile.AccessFlags
-import java.lang.constant.ClassDesc
 import java.lang.constant.ConstantDescs
 import java.lang.constant.MethodTypeDesc
 import java.lang.reflect.AccessFlag
 
-val MD_Object_init = defaultConstructorData(ConstantDescs.CD_Object)
+val MD_Object_init = defaultConstructorData(ClassData(ConstantDescs.CD_Object))
 private const val toString_NAME = "toString"
 
-fun defaultConstructorData(owner: ClassDesc): MethodData {
+fun defaultConstructorData(owner: ClassData): MethodData {
   return MethodData(
     owner,
     ConstantDescs.INIT_NAME,
@@ -19,7 +18,7 @@ fun defaultConstructorData(owner: ClassDesc): MethodData {
   )
 }
 
-fun MD_toString(owner: ClassDesc): MethodData {
+fun MD_toString(owner: ClassData): MethodData {
   // public String toString();
   return MethodData(
     owner, toString_NAME, AccessFlags.ofMethod(AccessFlag.PUBLIC),

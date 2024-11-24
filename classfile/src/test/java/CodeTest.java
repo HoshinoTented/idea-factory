@@ -27,6 +27,7 @@ public class CodeTest {
   public static void main(String[] args) throws NoSuchMethodException, IllegalAccessException {
     boolean z = true;
     boolean zz = false;
+    boolean zzz = !z;
     byte b = 127;
     short s = 128;
     int i = 114514;
@@ -34,9 +35,12 @@ public class CodeTest {
     float f = 0.1F;
     double d = 0.2D;
     char c = '1';
+    boolean zzzz = i > j;
     byte[] ba = {42};
     long[] la = {42};
     Object[] oa = {new Object()};
+    Object oao = oa[0];
+    Object boxing = 810;
     Function<Integer, String> itoa = ii -> Long.toString(ii + j);
     var lookup = MethodHandles.publicLookup();
     var method_bar = lookup.findVirtual(CodeTest.class, "bar", MethodType.methodType(void.class));

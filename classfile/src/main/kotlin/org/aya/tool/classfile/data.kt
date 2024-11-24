@@ -1,6 +1,6 @@
 package org.aya.tool.classfile
 
-import kala.collection.Seq
+import kala.collection.immutable.ImmutableSeq
 import java.lang.classfile.*
 import java.lang.classfile.constantpool.ConstantPoolBuilder
 import java.lang.classfile.constantpool.MethodRefEntry
@@ -9,19 +9,11 @@ import java.lang.reflect.AccessFlag
 
 /// region ClassData
 
-@JvmRecord
-data class ClassData(
-  val flags: AccessFlags,
-  val className: ClassDesc,
-  val interfaces: Seq<ClassDesc>,
-  val superclass: ClassDesc,
-) {
-  constructor(className: ClassDesc) : this(
-    AccessFlags.ofClass(AccessFlag.PUBLIC),
-    className,
-    Seq.empty<ClassDesc>(),
-    ConstantDescs.CD_Object
-  )
+interface ClassData {
+  val flags: AccessFlags
+  val className: ClassDesc
+  val interfaces: ImmutableSeq<ClassData>
+  val superclass: ClassData
   
   fun build(file: ClassFile, handler: ClassBuilderWrapper.() -> Unit): ByteArray {
     return file.build(className) { cb: ClassBuilder ->
@@ -29,9 +21,9 @@ data class ClassData(
       
       val superclass = superclass
       val interfaces = interfaces
-      cb.withSuperclass(superclass)
+      cb.withSuperclass(superclass.className)
       
-      if (interfaces.isNotEmpty) cb.withInterfaceSymbols(interfaces.asJava())
+      if (interfaces.isNotEmpty) cb.withInterfaceSymbols(interfaces.map { it.className }.asJava())
       
       val cbw = ClassBuilderWrapper(this, cb)
       handler.invoke(cbw)
@@ -52,7 +44,61 @@ data class ClassData(
   }
 }
 
+fun ClassData(
+  flags: AccessFlags,
+  className: ClassDesc,
+  interfaces: ImmutableSeq<ClassData>,
+  superclass: ClassData,
+): ClassData {
+  return ClassDataImpl(flags, className, interfaces, superclass)
+}
+
+fun ClassData(className: ClassDesc): ClassData {
+  return ClassData(
+    AccessFlags.ofClass(AccessFlag.PUBLIC),
+    className,
+    ImmutableSeq.empty(),
+    ClassData(Object::class.java)
+  )
+}
+
+fun ClassData(clazz: Class<*>): ClassData {
+  return ClassDataWrapper(clazz)
+}
+
+@JvmRecord
+data class ClassDataImpl(
+  override val flags: AccessFlags,
+  override val className: ClassDesc,
+  override val interfaces: ImmutableSeq<ClassData>,
+  override val superclass: ClassData,
+) : ClassData
+
+data class ClassDataWrapper(val clazz: Class<*>) : ClassData {
+  override val className: ClassDesc by lazy {
+    clazz.asDesc()
+  }
+  
+  override val flags: AccessFlags by lazy {
+    val flagsMark = clazz.accessFlags().fold(0x0) { acc, flag ->
+      acc or flag.mask()
+    }
+    
+    AccessFlags.ofClass(flagsMark)
+  }
+  
+  override val interfaces: ImmutableSeq<ClassData> by lazy {
+    ImmutableSeq.from(clazz.interfaces).map { ClassDataWrapper(it) }
+  }
+  
+  override val superclass: ClassData by lazy {
+    ClassDataWrapper(clazz.superclass)
+  }
+}
+
 /// endregion ClassData
+
+/// region FieldData
 
 @JvmRecord
 data class FieldData(
@@ -66,14 +112,16 @@ data class FieldData(
   }
 }
 
-@JvmRecord
-data class MethodData(
-  val inClass: ClassDesc,
-  val methodName: String,
-  val flags: AccessFlags,
-  val signature: MethodTypeDesc,
-  val isInterface: Boolean,
-) {
+/// endregion FieldData
+
+/// region MethodData
+
+interface MethodData {
+  val inClass: ClassData
+  val methodName: String
+  val flags: AccessFlags
+  val signature: MethodTypeDesc
+  val isInterface: Boolean
   val isStatic get() = flags.has(AccessFlag.STATIC)
   
   fun kind(): DirectMethodHandleDesc.Kind {
@@ -90,7 +138,7 @@ data class MethodData(
   fun makeMethodHandle(): DirectMethodHandleDesc {
     return MethodHandleDesc.ofMethod(
       kind(),
-      inClass,
+      inClass.className,
       methodName,
       signature
     )
@@ -102,11 +150,33 @@ data class MethodData(
     cb.builder.withMethodBody(
       methodName, signature, flags.flagsMask()
     ) { codeBuilder ->
-      build.invoke(CodeBuilderWrapper(cb, codeBuilder, VariablePool(usedSlot), !isStatic))
+      build.invoke(CodeBuilderWrapper(cb, codeBuilder, VariablePool(usedSlot - 1), !isStatic))
     }
   }
   
   fun makeMethodRefEntry(builder: ConstantPoolBuilder): MethodRefEntry {
-    return builder.methodRefEntry(inClass, methodName, signature)
+    return builder.methodRefEntry(inClass.className, methodName, signature)
   }
 }
+
+fun MethodData(
+  inClass: ClassData,
+  methodName: String,
+  flags: AccessFlags,
+  signature: MethodTypeDesc,
+  isInterface: Boolean,
+): MethodData {
+  return MethodDataImpl(inClass, methodName, flags, signature, isInterface)
+}
+
+@JvmRecord
+data class MethodDataImpl(
+  override val inClass: ClassData,
+  override val methodName: String,
+  override val flags: AccessFlags,
+  override val signature: MethodTypeDesc,
+  override val isInterface: Boolean,
+) : MethodData {
+}
+
+/// endregion MethodData
