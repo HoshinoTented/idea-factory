@@ -136,7 +136,7 @@ class ClassBuilderWrapper(
   ): MethodData {
     anyConstructor = true
     return method(ConstantDescs.CD_void, ConstantDescs.INIT_NAME, parameterType) {
-      invokespecial(CodeBuilderWrapper.thisRef, superConstructor, superArguments)
+      invoke(CodeBuilderWrapper.InvokeKind.Special, CodeBuilderWrapper.thisRef, superConstructor, superArguments)
       handler.invoke(this, it)
     }
   }

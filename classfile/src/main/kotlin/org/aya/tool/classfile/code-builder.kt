@@ -19,45 +19,14 @@ class CodeBuilderWrapper constructor(
   private val hasThis: Boolean
 ) {
   /// region invoke
-  private enum class InvokeKind {
+  internal enum class InvokeKind {
     Interface,
     Virtual,
     Static,
     Special
   }
   
-  fun invokeinterface(
-    theObject: CodeCont,
-    theMethod: MethodData,
-    args: Seq<CodeCont>,
-  ) {
-    invoke(InvokeKind.Interface, theObject, theMethod, args)
-  }
-  
-  fun invokevirtual(
-    theObject: CodeCont,
-    theMethod: MethodData,
-    args: Seq<CodeCont>,
-  ) {
-    invoke(InvokeKind.Virtual, theObject, theMethod, args)
-  }
-  
-  fun invokespecial(
-    theObject: CodeCont,
-    theMethod: MethodData,
-    args: Seq<CodeCont>,
-  ) {
-    invoke(InvokeKind.Special, theObject, theMethod, args)
-  }
-  
-  fun invokestatic(
-    theMethod: MethodData,
-    args: Seq<CodeCont>,
-  ) {
-    invoke(InvokeKind.Static, null, theMethod, args)
-  }
-  
-  private fun invoke(
+  internal fun invoke(
     invokeKind: InvokeKind,
     theObject: CodeCont?,
     theMethod: MethodData,
@@ -98,7 +67,7 @@ class CodeBuilderWrapper constructor(
     assert(isStatic) { "not static" }
     val argSeq = ImmutableArray.Unsafe.wrap<CodeCont>(args)
     return ExprCont(this.signature.returnType()) {
-      invokestatic(this@invoke, argSeq)
+      invoke(InvokeKind.Static, null, this@invoke, argSeq)
     }
   }
   
@@ -107,16 +76,16 @@ class CodeBuilderWrapper constructor(
     val argSeq = ImmutableArray.Unsafe.wrap<CodeCont>(args)
     val cont: CodeCont = when (data.kind()) {
       DirectMethodHandleDesc.Kind.VIRTUAL -> {
-        { invokevirtual(obj, data, argSeq) }
+        { invoke(InvokeKind.Virtual, obj, data, argSeq) }
       }
       
       DirectMethodHandleDesc.Kind.INTERFACE_VIRTUAL -> {
-        { invokeinterface(obj, data, argSeq) }
+        { invoke(InvokeKind.Interface, obj, data, argSeq) }
       }
       
       DirectMethodHandleDesc.Kind.SPECIAL,
       DirectMethodHandleDesc.Kind.INTERFACE_SPECIAL -> {
-        { invokespecial(obj, data, argSeq) }
+        { invoke(InvokeKind.Special, obj, data, argSeq) }
       }
       
       else -> throw IllegalArgumentException("not a suitable method")
@@ -137,7 +106,7 @@ class CodeBuilderWrapper constructor(
   fun MethodData.nu(vararg args: CodeCont): ExprCont = ExprCont(this.inClass.className) {
     builder.new_(this@nu.inClass.className)
     // invoke constructor
-    invokespecial({ builder.dup() }, this@nu, ImmutableArray.Unsafe.wrap(args))
+    invoke(InvokeKind.Special, { builder.dup() }, this@nu, ImmutableArray.Unsafe.wrap(args))
   }
   
   fun ret(value: ExprCont? = null) {
