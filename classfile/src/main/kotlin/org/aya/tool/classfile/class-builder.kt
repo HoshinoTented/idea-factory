@@ -91,7 +91,7 @@ class ClassBuilderWrapper(
     )
     
     data.build(this@ClassBuilderWrapper) {
-      handler.invoke(this, ArgumentProvider(data))
+      handler.invoke(this, DefaultArgumentProvider(data.signature, !data.isStatic))
     }
     
     return data
