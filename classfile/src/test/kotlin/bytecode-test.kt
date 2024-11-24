@@ -78,7 +78,7 @@ class BytecodeTest {
         val ref_foo = field_foo.of(self)
         val ifResult = ifThen(ref_foo.get().instanceof(ConstantDescs.CD_String), ExprCont(ConstantDescs.CD_boolean) {
           +method_PrintStream_println.of(field_System_out.get()).invoke(ref_foo.get())
-          +CodeBuilderWrapper.ya
+          +CodeBuilderWrapper.ja
         }).orElse(ExprCont(ConstantDescs.CD_boolean) {
           ref_foo.set(CodeBuilderWrapper.nilRef)
           +CodeBuilderWrapper.nein

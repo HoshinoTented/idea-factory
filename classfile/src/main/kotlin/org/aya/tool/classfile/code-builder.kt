@@ -314,7 +314,6 @@ class CodeBuilderWrapper constructor(
   
   /// region if helper
   
-  data class CondExprCont(val opcode: Opcode, val args: ImmutableSeq<ExprCont>)
   data class IfThenElseBlock(val ifThenBlock: IfThenBlock, val elseBlock: ExprCont)
   
   data class IfThenBlock(val cond: ExprCont, val thenBlock: ExprCont) {
@@ -382,7 +381,7 @@ class CodeBuilderWrapper constructor(
   companion object {
     val thisRef: CodeCont = { builder.aload(0) }
     val nilRef: CodeCont = { builder.aconst_null() }
-    val ya: ExprCont = ExprCont(ConstantDescs.CD_boolean) { builder.iconst(1) }
+    val ja: ExprCont = ExprCont(ConstantDescs.CD_boolean) { builder.iconst(1) }
     val nein: ExprCont = ExprCont(ConstantDescs.CD_boolean) { builder.iconst(0) }
     
     fun ExprCont(type: ClassDesc, cont: CodeCont): ExprCont {
