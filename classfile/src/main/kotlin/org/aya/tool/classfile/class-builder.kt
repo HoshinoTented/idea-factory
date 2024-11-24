@@ -1,6 +1,7 @@
 package org.aya.tool.classfile
 
 import kala.collection.Seq
+import kala.collection.immutable.ImmutableArray
 import kala.collection.immutable.ImmutableSeq
 import java.lang.classfile.AccessFlags
 import java.lang.classfile.ClassBuilder
@@ -34,6 +35,57 @@ class ClassBuilderWrapper(
     }
   }
   
+  fun methodHandler0(handler: MethodCodeCont0): MethodCodeCont = {
+    handler.invoke(this)
+  }
+  
+  fun methodHandler1(handler: MethodCodeCont1): MethodCodeCont = {
+    val arg0 = it.arg(0)
+    handler.invoke(this, arg0)
+  }
+  
+  fun methodHandler2(handler: MethodCodeCont2): MethodCodeCont = {
+    val arg0 = it.arg(0)
+    val arg1 = it.arg(1)
+    handler.invoke(this, arg0, arg1)
+  }
+  
+  fun AccessFlagBuilder.method(
+    returnType: ClassDesc,
+    methodName: String,
+    handler: MethodCodeCont0,
+  ): MethodData {
+    return method(returnType, methodName, ImmutableSeq.empty(), methodHandler0(handler))
+  }
+  
+  fun AccessFlagBuilder.method(
+    returnType: ClassDesc,
+    methodName: String,
+    parameterType0: ClassDesc,
+    handler: MethodCodeCont1,
+  ): MethodData {
+    return method(returnType, methodName, ImmutableSeq.of(parameterType0), methodHandler1(handler))
+  }
+  
+  fun AccessFlagBuilder.method(
+    returnType: ClassDesc,
+    methodName: String,
+    parameterType0: ClassDesc,
+    parameterType1: ClassDesc,
+    handler: MethodCodeCont2,
+  ): MethodData {
+    return method(returnType, methodName, ImmutableSeq.of(parameterType0, parameterType1), methodHandler2(handler))
+  }
+  
+  fun AccessFlagBuilder.method(
+    returnType: ClassDesc,
+    methodName: String,
+    vararg parameterTypes: ClassDesc,
+    handler: MethodCodeCont,
+  ): MethodData {
+    return method(returnType, methodName, ImmutableArray.Unsafe.wrap(parameterTypes), handler)
+  }
+  
   fun AccessFlagBuilder.method(
     returnType: ClassDesc,
     methodName: String,
@@ -55,9 +107,40 @@ class ClassBuilderWrapper(
   }
   
   fun AccessFlagBuilder.constructor(
-    parameterType: Seq<ClassDesc>,
     superConstructor: MethodData,
     superArguments: Seq<CodeCont>,
+    handler: MethodCodeCont0,
+  ): MethodData {
+    return constructor(superConstructor, superArguments, ImmutableSeq.empty(), methodHandler0(handler))
+  }
+  
+  fun AccessFlagBuilder.constructor(
+    superConstructor: MethodData,
+    superArguments: Seq<CodeCont>,
+    parameterType0: ClassDesc,
+    handler: MethodCodeCont1,
+  ): MethodData {
+    return constructor(superConstructor, superArguments, ImmutableSeq.of(parameterType0), methodHandler1(handler))
+  }
+  
+  fun AccessFlagBuilder.constructor(
+    superConstructor: MethodData,
+    superArguments: Seq<CodeCont>,
+    parameterType0: ClassDesc, parameterType1: ClassDesc,
+    handler: MethodCodeCont2,
+  ): MethodData {
+    return constructor(
+      superConstructor,
+      superArguments,
+      ImmutableSeq.of(parameterType0, parameterType1),
+      methodHandler2(handler)
+    )
+  }
+  
+  fun AccessFlagBuilder.constructor(
+    superConstructor: MethodData,
+    superArguments: Seq<CodeCont>,
+    parameterType: Seq<ClassDesc>,
     handler: MethodCodeCont,
   ): MethodData {
     anyConstructor = true
@@ -123,9 +206,8 @@ class ClassBuilderWrapper(
    */
   fun defaultConstructor(): MethodData {
     return public().constructor(
-      Seq.empty(),
       defaultConstructorData(classData.superclass),
-      Seq.empty()
+      Seq.empty(),
     ) { }
   }
   
@@ -134,10 +216,7 @@ class ClassBuilderWrapper(
   }
 }
 
-fun ClassBuilderWrapper.main(handler: CodeBuilderWrapper.(CodeBuilderWrapper.ExprCont) -> Unit): MethodData {
+fun ClassBuilderWrapper.main(handler: MethodCodeCont1): MethodData {
   return public().static().final()
-    .method(ConstantDescs.CD_void, MAIN_NAME, Seq.of(Array<String>::class.java.asDesc())) {
-      val args = it.arg(0)
-      handler.invoke(this, args)
-    }
+    .method(ConstantDescs.CD_void, MAIN_NAME, Array<String>::class.java.asDesc(), handler)
 }

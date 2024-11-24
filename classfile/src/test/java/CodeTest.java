@@ -1,3 +1,6 @@
+import java.lang.constant.ConstantDescs;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.util.Objects;
 import java.util.function.Function;
 
@@ -14,9 +17,14 @@ public class CodeTest {
 
   public CodeTest(int i) {
     this.i = i;
+    Runnable lambdaInCon = () -> System.out.println();
   }
 
-  public static void main(String[] args) {
+  public void bar() {
+    System.out.println("bar");
+  }
+
+  public static void main(String[] args) throws NoSuchMethodException, IllegalAccessException {
     boolean z = true;
     boolean zz = false;
     byte b = 127;
@@ -30,6 +38,8 @@ public class CodeTest {
     long[] la = {42};
     Object[] oa = {new Object()};
     Function<Integer, String> itoa = ii -> Long.toString(ii + j);
+    var lookup = MethodHandles.publicLookup();
+    var method_bar = lookup.findVirtual(CodeTest.class, "bar", MethodType.methodType(void.class));
     Objects.requireNonNull(byte.class.toString());
   }
 }

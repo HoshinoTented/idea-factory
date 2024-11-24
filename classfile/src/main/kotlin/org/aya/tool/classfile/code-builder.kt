@@ -5,6 +5,7 @@ import kala.collection.immutable.ImmutableArray
 import kala.collection.immutable.ImmutableSeq
 import org.jetbrains.annotations.Contract
 import java.lang.classfile.CodeBuilder
+import java.lang.classfile.TypeKind
 import java.lang.constant.ClassDesc
 import java.lang.constant.DirectMethodHandleDesc
 import java.lang.reflect.AccessFlag
@@ -87,8 +88,16 @@ class CodeBuilderWrapper constructor(
   
   @Contract(pure = true)
   fun MethodData.of(obj: CodeBuilderWrapper.() -> Unit): MethodRef {
-    assert(!this.flags.has(AccessFlag.STATIC))
+    assert(!isStatic)
     return MethodRef(this@of, obj)
+  }
+  
+  fun MethodData.invoke(vararg args: CodeCont): ExprCont {
+    assert(isStatic)
+    val argSeq = ImmutableArray.Unsafe.wrap<CodeCont>(args)
+    return ExprCont(this.signature.returnType()) {
+      invokestatic(this@invoke, argSeq)
+    }
   }
   
   @Contract(pure = true)
@@ -102,21 +111,20 @@ class CodeBuilderWrapper constructor(
       DirectMethodHandleDesc.Kind.INTERFACE_VIRTUAL -> {
         { invokeinterface(obj, data, argSeq) }
       }
-      
       DirectMethodHandleDesc.Kind.SPECIAL,
-      DirectMethodHandleDesc.Kind.INTERFACE_SPECIAL,
-        -> {
+      DirectMethodHandleDesc.Kind.INTERFACE_SPECIAL -> {
         { invokespecial(obj, data, argSeq) }
       }
       
-      else -> TODO("unreachable")
+      else -> throw IllegalArgumentException("not a suitable method")
     }
     
     return ExprCont(this.data.signature.returnType(), cont)
   }
   
   /**
-   * Invoke a [CodeCont] immediately
+   * Invoke a [CodeCont] immediately,
+   * this is used on an [ExprCont] usually, in order to discard the result.
    */
   operator fun CodeCont.unaryPlus() {
     this@unaryPlus.invoke(this@CodeBuilderWrapper)
@@ -126,6 +134,15 @@ class CodeBuilderWrapper constructor(
     builder.new_(this@nu.inClass)
     // invoke constructor
     invokespecial({ builder.dup() }, this@nu, ImmutableArray.Unsafe.wrap(args))
+  }
+  
+  fun ret(value: ExprCont? = null) {
+    if (value == null) {
+      builder.return_()
+    } else {
+      val ty = assertValidType(value.type)
+      builder.returnInstruction(TypeKind.fromDescriptor(ty.descriptorString()))
+    }
   }
   
   /// endregion method helper
@@ -172,7 +189,8 @@ class CodeBuilderWrapper constructor(
   /// region easy argument
   
   /**
-   * A [CodeCont] that push an expression to the stack, with type information [type]
+   * A [CodeCont] that push an expression to the stack, with type information [type].
+   * Note that [type] may not be a valid type, e.g. `void`.
    */
   data class ExprCont(val type: ClassDesc, val cont: CodeCont) : (CodeBuilderWrapper) -> Unit {
     override fun invoke(p1: CodeBuilderWrapper) {
@@ -181,10 +199,11 @@ class CodeBuilderWrapper constructor(
   }
   
   @get:Contract(pure = true)
-  val self: ExprCont
-    get() = if (hasThis) ExprCont(inClassFile.classData.className, thisRef) else {
+  val self: ExprCont by lazy {
+    if (hasThis) ExprCont(inClassFile.classData.className, thisRef) else {
       throw IllegalStateException("static")
     }
+  }
   
   fun subscoped(newPool: VariablePool): CodeBuilderWrapper {
     return CodeBuilderWrapper(inClassFile, builder, newPool, hasThis)

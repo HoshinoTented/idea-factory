@@ -49,17 +49,15 @@ class BytecodeTest {
       val field_foo = public().field(ConstantDescs.CD_String, "foo")
       
       val SomeMain_nu = public().constructor(
-        Seq.of(ConstantDescs.CD_Object),
-        MD_Object_init,
-        Seq.empty()
-      ) { argProvider ->
-        val arg0 = argProvider.arg(0)
+        MD_Object_init, Seq.empty(),
+        ConstantDescs.CD_Object
+      ) { arg0 ->
         field_foo.of(self).set(Object_toString.of(arg0).invoke())
         val f = Runnable_run.lambda(self) {
           val self = it.capture(0)
           val out = field_System_out.get()
           +method_PrintStream_println.of(out).invoke(field_foo.of(self).get())
-          builder.return_()
+          ret()
         }
         
         +Runnable_run.of(f).invoke()
@@ -69,7 +67,7 @@ class BytecodeTest {
       main { args ->
         val obj = MD_Object_new.nu()
         +SomeMain_nu.nu(obj)
-        builder.return_()
+        ret()
       }
     }
     

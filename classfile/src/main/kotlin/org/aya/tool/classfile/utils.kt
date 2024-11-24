@@ -2,6 +2,7 @@ package org.aya.tool.classfile
 
 import java.lang.classfile.CodeBuilder
 import java.lang.constant.ClassDesc
+import java.lang.constant.ConstantDescs
 
 /**
  * A continuation about instruction generation.
@@ -9,8 +10,6 @@ import java.lang.constant.ClassDesc
  * the continuation must push/load a value to the stack.
  */
 typealias CodeCont = CodeBuilderWrapper.() -> Unit
-typealias MethodCodeCont = CodeBuilderWrapper.(ArgumentProvider) -> Unit
-typealias LambdaCodeCont = CodeBuilderWrapper.(LambdaArgumentProvider) -> Unit
 
 /**
  * Make [ClassDesc] from [Class]
@@ -25,4 +24,15 @@ fun Class<*>.asDesc(): ClassDesc {
   } else {
     ClassDesc.of(name)
   }
+}
+
+/**
+ * Check whether the type [desc] is a valid type, that is, not `void`
+ */
+fun assertValidType(desc: ClassDesc): ClassDesc {
+  assert(desc.descriptorString() == ConstantDescs.CD_void.descriptorString()) {
+    "void"
+  }
+  
+  return desc
 }
