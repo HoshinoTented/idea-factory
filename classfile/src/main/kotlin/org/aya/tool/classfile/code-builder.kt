@@ -167,6 +167,8 @@ class CodeBuilderWrapper constructor(
       fun ofVoid(cont: CodeCont): ExprCont {
         return ExprCont(ConstantDescs.CD_void, cont)
       }
+      
+      fun from(bool: Boolean): ExprCont = if (bool) ja else nein
     }
     
     val type: ClassDesc
@@ -175,16 +177,32 @@ class CodeBuilderWrapper constructor(
       assert(isBoolean(type))
       return ExprCont(ConstantDescs.CD_boolean) {
         invoke(this)
-        builder.ifThenElse(Opcode.IFNE, { +nein }, { +ja })
+        builder.ifThenElse(Opcode.IFNE, {
+          it.iconst_0()
+        }, {
+          it.iconst_1()
+        })
+      }
+    }
+    
+    private fun checkNull(opcode: Opcode): ExprCont {
+      assert(type.isClassOrInterface)
+      return ExprCont(ConstantDescs.CD_boolean) {
+        invoke(this)
+        builder.ifThenElse(opcode, {
+          it.iconst_1()
+        }, {
+          it.iconst_0()
+        })
       }
     }
     
     fun isNull(): ExprCont {
-      assert(type.isClassOrInterface)
-      return ExprCont(ConstantDescs.CD_boolean) {
-        invoke(this)
-        builder.ifThenElse(Opcode.IFNULL, { +ja }, { +nein })
-      }
+      return checkNull(Opcode.IFNULL)
+    }
+    
+    fun isNotNull(): ExprCont {
+      return checkNull(Opcode.IFNONNULL)
     }
     
     fun instanceof(type: ClassDesc): ExprCont {
@@ -406,6 +424,7 @@ class CodeBuilderWrapper constructor(
   companion object {
     val thisRef: CodeCont = { builder.aload(0) }
     val nilRef: CodeCont = { builder.aconst_null() }
+    
     val ja: ExprCont = ExprCont(ConstantDescs.CD_boolean) { builder.iconst(1) }
     val nein: ExprCont = ExprCont(ConstantDescs.CD_boolean) { builder.iconst(0) }
     

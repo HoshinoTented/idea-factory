@@ -191,7 +191,7 @@ interface MethodData {
     cb.builder.withMethodBody(
       methodName, signature, flags.flagsMask()
     ) { codeBuilder ->
-      build.invoke(CodeBuilderWrapper(cb, codeBuilder, VariablePool(usedSlot - 1), !isStatic))
+      build.invoke(CodeBuilderWrapper(cb, codeBuilder, DefaultVariablePool(usedSlot - 1), !isStatic))
     }
   }
   
