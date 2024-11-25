@@ -3,29 +3,12 @@ package org.aya.tool.classfile
 import java.lang.classfile.TypeKind
 import java.lang.constant.ClassDesc
 import java.lang.constant.ConstantDescs
-import java.lang.constant.MethodTypeDesc
-import kotlin.reflect.KFunction
-import kotlin.reflect.jvm.jvmErasure
 
 /**
  * Make [ClassDesc] from [Class]
  */
 fun Class<*>.asDesc(): ClassDesc {
-  val name: String = this.getName()
-  val first = name[0]
-  
-  return if (first == '[' || first == 'L') {
-    // in case of array Class
-    ClassDesc.ofDescriptor(name.replace('.', '/'))
-  } else {
-    ClassDesc.of(name)
-  }
-}
-
-fun <R> KFunction<R>.asDesc(): MethodTypeDesc {
-  val params = parameters.map { it.type.jvmErasure.java.asDesc() }
-  val ret = returnType.jvmErasure.java.asDesc()
-  return MethodTypeDesc.of(ret, params)
+  return ClassDesc.ofDescriptor(descriptorString())
 }
 
 /**
@@ -52,7 +35,7 @@ fun isInteger(desc: ClassDesc): Boolean {
 }
 
 /**
- * Check whether two type matches, fail if mismatch, true if matches and not `void`, false if both `void`
+ * Check whether two types match, fail if mismatch, true if match and not `void`, false if both `void`.
  */
 fun assertTypeMatch(lhs: ClassDesc, rhs: ClassDesc): Boolean {
   val lhsDesc = lhs.descriptorString()

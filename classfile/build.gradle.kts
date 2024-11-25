@@ -4,7 +4,7 @@ apply {
 
 dependencies {
   implementation(kotlin("stdlib"))
-  implementation(kotlin("reflect"))
+//  implementation(kotlin("reflect"))
 }
 
 tasks.withType<JavaCompile> {
