@@ -20,6 +20,10 @@ public class CodeTest {
     Runnable lambdaInCon = () -> System.out.println();
   }
 
+  public void fail() {
+    String what = (String) new Object();
+  }
+
   public void bar() {
     System.out.println("bar");
   }

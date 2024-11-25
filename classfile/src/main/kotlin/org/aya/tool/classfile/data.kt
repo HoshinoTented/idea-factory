@@ -39,7 +39,6 @@ interface ClassData {
     }
     
     output.outputs.put(classDesc.displayName(), primaryOutput)
-    
     return output
   }
   

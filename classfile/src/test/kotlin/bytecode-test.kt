@@ -1,6 +1,5 @@
 import kala.collection.Seq
 import org.aya.tool.classfile.*
-import org.aya.tool.classfile.CodeBuilderWrapper.Companion.ExprCont
 import org.junit.jupiter.api.Test
 import java.io.PrintStream
 import java.lang.classfile.AccessFlags
@@ -9,7 +8,6 @@ import java.lang.constant.ClassDesc
 import java.lang.constant.ConstantDescs
 import java.lang.constant.MethodTypeDesc
 import java.lang.reflect.AccessFlag
-import java.nio.file.Files
 import java.nio.file.Path
 
 class BytecodeTest {
@@ -80,15 +78,16 @@ class BytecodeTest {
       
       val SomeMain_bar = public().method(ConstantDescs.CD_boolean, "bar") {
         val ref_foo = field_foo.of(self)
-        val ifResult = ifThen(ref_foo.get().instanceof(ConstantDescs.CD_String), ExprCont(ConstantDescs.CD_boolean) {
-          +method_PrintStream_println.of(field_System_out.get()).invoke(ref_foo.get())
-          +CodeBuilderWrapper.ja
-        }).orElse(ExprCont(ConstantDescs.CD_boolean) {
+        val result = let(ConstantDescs.CD_boolean)
+        ifInstanceOfThen(ref_foo.get(), ConstantDescs.CD_String) { realString ->
+          +method_PrintStream_println.of(field_System_out.get()).invoke(realString)
+          result.set(true)
+        }.orElse {
           ref_foo.set(CodeBuilderWrapper.nilRef)
-          +CodeBuilderWrapper.nein
-        }).expr()
+          result.set(false)
+        }.end()
         
-        ret(ifResult)
+        ret(result)
       }
       
       main { args ->

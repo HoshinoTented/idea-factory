@@ -4,11 +4,8 @@ import java.lang.classfile.TypeKind
 import java.lang.constant.ClassDesc
 import java.lang.constant.ConstantDescs
 import java.lang.constant.MethodTypeDesc
-import java.lang.reflect.Type
 import kotlin.reflect.KFunction
-import kotlin.reflect.jvm.javaType
 import kotlin.reflect.jvm.jvmErasure
-import kotlin.reflect.jvm.jvmName
 
 /**
  * Make [ClassDesc] from [Class]

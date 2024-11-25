@@ -194,6 +194,11 @@ class CodeBuilderWrapper constructor(
         builder.instanceof_(type)
       }
     }
+    
+    fun cast(type: ClassDesc): ExprCont = ExprCont(type) {
+      invoke(this)
+      builder.checkcast(type)
+    }
   }
   
   
@@ -376,6 +381,24 @@ class CodeBuilderWrapper constructor(
   @Contract(pure = true)
   fun ifThen(cond: ExprCont, thenBlock: CodeCont): IfThenBlock {
     return ifThen(cond, ExprCont.ofVoid(thenBlock))
+  }
+  
+  fun ifInstanceOfThen(expr: ExprCont, type: ClassDesc, thenBlock: CodeBuilderWrapper.(Variable) -> Unit): IfThenBlock {
+    // it is harmless that we occupy one variable slot before the code generation
+    val cache = let(expr.type)
+    val cachedExpr: ExprCont = ExprCont(expr.type) {
+      cache.set(expr)
+      +cache
+    }
+    
+    // if ((cache = expr) instanceof type) {
+    return ifThen(cachedExpr.instanceof(type)) {
+      val casted = let(type)
+      casted.set(cache.cast(type))
+      // var casted = (type) cache;
+      thenBlock.invoke(this, casted)
+    }
+    // }
   }
   
   /// endregion if helper
