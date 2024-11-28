@@ -12,7 +12,7 @@ import java.lang.constant.ConstantDescs
 import java.lang.constant.DirectMethodHandleDesc
 import java.lang.reflect.AccessFlag
 
-class CodeBuilderWrapper constructor(
+class CodeBuilderWrapper(
   private val inClassFile: ClassBuilderWrapper,
   val builder: CodeBuilder,
   val pool: VariablePool,
@@ -162,6 +162,10 @@ class CodeBuilderWrapper constructor(
   
   /// region expression helper
   
+  /**
+   * A [CodeCont] that push an expression to the stack, with type information [type].
+   * Note that [type] may not be a valid type, e.g. `void`.
+   */
   interface ExprCont : (CodeBuilderWrapper) -> Unit {
     companion object {
       fun ofVoid(cont: CodeCont): ExprCont {
@@ -173,37 +177,11 @@ class CodeBuilderWrapper constructor(
     
     val type: ClassDesc
     
-    operator fun not(): ExprCont {
-      assert(isBoolean(type))
-      return ExprCont(ConstantDescs.CD_boolean) {
-        invoke(this)
-        builder.ifThenElse(Opcode.IFNE, {
-          it.iconst_0()
-        }, {
-          it.iconst_1()
-        })
-      }
-    }
+    operator fun not(): CondExprCont = CondExprCont(CondExprCont.CondOp.isEq0, ImmutableSeq.of(this))
     
-    private fun checkNull(opcode: Opcode): ExprCont {
-      assert(type.isClassOrInterface)
-      return ExprCont(ConstantDescs.CD_boolean) {
-        invoke(this)
-        builder.ifThenElse(opcode, {
-          it.iconst_1()
-        }, {
-          it.iconst_0()
-        })
-      }
-    }
+    fun isNull(): CondExprCont = CondExprCont(CondExprCont.CondOp.isNull, ImmutableSeq.of(this))
     
-    fun isNull(): ExprCont {
-      return checkNull(Opcode.IFNULL)
-    }
-    
-    fun isNotNull(): ExprCont {
-      return checkNull(Opcode.IFNONNULL)
-    }
+    fun isNotNull(): CondExprCont = CondExprCont(CondExprCont.CondOp.isNotNull, ImmutableSeq.of(this))
     
     fun instanceof(type: ClassDesc): ExprCont {
       assert(type.isClassOrInterface)
@@ -219,14 +197,33 @@ class CodeBuilderWrapper constructor(
     }
   }
   
-  
-  /**
-   * A [CodeCont] that push an expression to the stack, with type information [type].
-   * Note that [type] may not be a valid type, e.g. `void`.
-   */
-  data class ExprContImpl(override val type: ClassDesc, val cont: CodeCont) : ExprCont {
+  data class DefaultExprCont(override val type: ClassDesc, val cont: CodeCont) : ExprCont {
     override fun invoke(p1: CodeBuilderWrapper) {
       cont.invoke(p1)
+    }
+  }
+  
+  data class CondExprCont(val opcode: CondOp, val args: ImmutableSeq<ExprCont>) : ExprCont {
+    enum class CondOp(val opcode: Opcode, val argc: Int) {
+      isNull(Opcode.IFNULL, 1), isNotNull(Opcode.IFNONNULL, 1),
+      isGt0(Opcode.IFGT, 1), isGe0(Opcode.IFGE, 1),
+      isEq0(Opcode.IFEQ, 1), isNeq0(Opcode.IFNE, 1)
+    }
+    
+    override val type: ClassDesc = ConstantDescs.CD_boolean
+    
+    fun invokeArgs(builder: CodeBuilderWrapper) {
+      // TODO: what is the order of argument? Note that `ifThenElse` reverses the condition
+      args.view().reversed().forEach { it.invoke(builder) }
+    }
+    
+    override fun invoke(p1: CodeBuilderWrapper) {
+      invokeArgs(p1)
+      p1.builder.ifThenElse(opcode.opcode, {
+        it.iconst_1()
+      }, {
+        it.iconst_0()
+      })
     }
   }
   
@@ -275,6 +272,7 @@ class CodeBuilderWrapper constructor(
       ?: throw AssertionError("not an array")
     
     return ExprCont(ty) {
+      +get()
       builder.iconst(idx)
       builder.arrayLoadInstruction(ty.typeKind)
     }
@@ -310,9 +308,44 @@ class CodeBuilderWrapper constructor(
     val ty = type.componentType()
       ?: throw AssertionError("not an array")
     
+    +get()
     builder.iconst(idx)
     value.invoke(this@CodeBuilderWrapper)
     builder.arrayStoreInstruction(ty.typeKind)
+  }
+  
+  fun mkArray(type: ClassDesc, length: Int): ExprCont {
+    assert(length >= 0)
+    val kind = type.typeKind
+    if (kind === TypeKind.VoidType) {
+      throw IllegalArgumentException("array of void")
+    }
+    
+    return ExprCont(type.arrayType(1)) {
+      builder.iconst(length)
+      if (kind !== TypeKind.ReferenceType) {
+        builder.newarray(kind)
+      } else {
+        builder.anewarray(type)
+      }
+    }
+  }
+  
+  fun mkArray(type: ClassDesc, length: Int, initializer: ImmutableSeq<ExprCont>): ExprCont {
+    assert(initializer.size() == length)
+    val arr = mkArray(type, length)
+    return ExprCont(arr.type) {
+      +arr
+      initializer.forEachIndexed { idx, element ->
+        builder.dup()
+        // position
+        builder.iconst(idx)
+        // value
+        +element
+        // store
+        builder.arrayStoreInstruction(arr.type.typeKind)
+      }
+    }
   }
   
   /// endregion local variable helper
@@ -335,7 +368,7 @@ class CodeBuilderWrapper constructor(
     }
   }
   
-  /// endregion
+  /// endregion lambda helper
   
   /// region if helper
   
@@ -404,7 +437,7 @@ class CodeBuilderWrapper constructor(
   fun ifInstanceOfThen(expr: ExprCont, type: ClassDesc, thenBlock: CodeBuilderWrapper.(Variable) -> Unit): IfThenBlock {
     // it is harmless that we occupy one variable slot before the code generation
     val cache = let(expr.type)
-    val cachedExpr: ExprCont = ExprCont(expr.type) {
+    val cachedExpr = ExprCont(expr.type) {
       cache.set(expr)
       +cache
     }
@@ -424,12 +457,14 @@ class CodeBuilderWrapper constructor(
   companion object {
     val thisRef: CodeCont = { builder.aload(0) }
     val nilRef: CodeCont = { builder.aconst_null() }
+    val trueRef: CodeCont = { builder.iconst(1) }
+    val falseRef: CodeCont = { builder.iconst(0) }
     
-    val ja: ExprCont = ExprCont(ConstantDescs.CD_boolean) { builder.iconst(1) }
-    val nein: ExprCont = ExprCont(ConstantDescs.CD_boolean) { builder.iconst(0) }
+    val ja: ExprCont = ExprCont(ConstantDescs.CD_boolean, trueRef)
+    val nein: ExprCont = ExprCont(ConstantDescs.CD_boolean, falseRef)
     
     fun ExprCont(type: ClassDesc, cont: CodeCont): ExprCont {
-      return ExprContImpl(type, cont)
+      return DefaultExprCont(type, cont)
     }
   }
 }

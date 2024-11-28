@@ -24,7 +24,7 @@ interface ClassData {
   fun build(file: ClassFile, parent: DefaultClassOutput?, handler: ClassBuilderWrapper.() -> Unit): ClassOutput {
     val output: DefaultClassOutput = parent ?: DefaultClassOutput(MutableMap.create())
     val extraMask = if (!flags.has(AccessFlag.INTERFACE)) AccessFlag.SUPER.mask() else 0x0
-    val primaryOutput = file.build(classDesc) { cb: ClassBuilder ->
+    val bytecodeOutput = file.build(classDesc) { cb: ClassBuilder ->
       cb.withFlags(flags.flagsMask() or extraMask)
       
       val superclass = superclass
@@ -38,7 +38,7 @@ interface ClassData {
       cbw.done()
     }
     
-    output.outputs.put(classDesc.displayName(), primaryOutput)
+    output.addOutput(classDesc.displayName(), bytecodeOutput)
     return output
   }
   

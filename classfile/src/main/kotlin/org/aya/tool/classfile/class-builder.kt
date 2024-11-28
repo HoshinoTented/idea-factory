@@ -176,7 +176,7 @@ class ClassBuilderWrapper(
    * Note that we don't supply the dynamic type signature, cause this project is used for aya-prover while we
    * need only `() -> Term`.
    */
-  fun makeLambda(
+  internal fun makeLambda(
     interfaceMethod: MethodData,
     captureTypes: ImmutableSeq<ClassDesc>,
     handler: LambdaCodeCont
@@ -195,20 +195,20 @@ class ClassBuilderWrapper(
       handler.invoke(this@method, LambdaArgumentProvider(captureTypes, interfaceMethod.signature))
     }
     
-    // name: the only abstract method that functional interface defines
+    // name: the only abstract method that the functional interface defines
     // type: returns the functional interface, parameters are captures
     val nameAndType = pool.nameAndTypeEntry(
       interfaceMethod.methodName, MethodTypeDesc.of(
         interfaceMethod.inClass.classDesc,
-        captureTypes.toList()
+        captureTypes.asJava()
       )
     )
     
-    // 0th: erased function signature
+    // 0th: function signature with type parameters erased
     // 1st: the function name to the lambda
-    // 2nd: function signature
+    // 2nd: function signature with type parameters substituted
     val bsm = pool.bsmEntry(
-      lambdaBootstrapMethodHandle, listOf(
+      lambdaBootstrapMethodHandle, listOf<ConstantDesc>(
         interfaceMethod.signature,
         lambdaMethodData.makeMethodHandle(),
         interfaceMethod.signature,
