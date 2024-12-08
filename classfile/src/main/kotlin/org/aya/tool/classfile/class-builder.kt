@@ -35,7 +35,7 @@ class ClassBuilderWrapper(
   
   fun AccessFlagBuilder.field(type: ClassDesc, name: String): FieldData {
     val mask = AccessFlags.ofField(this@field.mask())
-    return FieldData(classData.classDesc, mask, type, name).apply {
+    return FieldData(classData.descriptor, mask, type, name).apply {
       build(builder)
     }
   }
@@ -85,18 +85,19 @@ class ClassBuilderWrapper(
   fun AccessFlagBuilder.method(
     returnType: ClassDesc,
     methodName: String,
-    parameterType: Seq<ClassDesc>,
+    parameterType: ImmutableSeq<ClassDesc>,
     handler: MethodCodeCont,
   ): MethodData {
     val flags = AccessFlags.ofMethod(this@method.mask())
     val data = MethodData(
-      classData, methodName, flags,
-      MethodTypeDesc.of(returnType, parameterType.asJava()),
+      classData.descriptor, methodName, flags,
+      parameterType.map { x -> Parameter.Exact(x) },
+      Parameter.Exact(returnType),
       false
     )
     
     data.build(this@ClassBuilderWrapper) {
-      handler.invoke(this, DefaultArgumentProvider(data.signature, !data.isStatic))
+      handler.invoke(this, DefaultArgumentProvider(data.descriptor, !data.isStatic))
     }
     
     return data
@@ -104,7 +105,7 @@ class ClassBuilderWrapper(
   
   fun AccessFlagBuilder.constructor(
     superConstructor: MethodData,
-    superArguments: Seq<CodeCont>,
+    superArguments: ImmutableSeq<CodeCont>,
     handler: MethodCodeCont0,
   ): MethodData {
     return constructor(superConstructor, superArguments, ImmutableSeq.empty(), methodHandler0(handler))
@@ -112,7 +113,7 @@ class ClassBuilderWrapper(
   
   fun AccessFlagBuilder.constructor(
     superConstructor: MethodData,
-    superArguments: Seq<CodeCont>,
+    superArguments: ImmutableSeq<CodeCont>,
     parameterType0: ClassDesc,
     handler: MethodCodeCont1,
   ): MethodData {
@@ -121,7 +122,7 @@ class ClassBuilderWrapper(
   
   fun AccessFlagBuilder.constructor(
     superConstructor: MethodData,
-    superArguments: Seq<CodeCont>,
+    superArguments: ImmutableSeq<CodeCont>,
     parameterType0: ClassDesc, parameterType1: ClassDesc,
     handler: MethodCodeCont2,
   ): MethodData {
@@ -135,8 +136,8 @@ class ClassBuilderWrapper(
   
   fun AccessFlagBuilder.constructor(
     superConstructor: MethodData,
-    superArguments: Seq<CodeCont>,
-    parameterType: Seq<ClassDesc>,
+    superArguments: ImmutableSeq<CodeCont>,
+    parameterType: ImmutableSeq<ClassDesc>,
     handler: MethodCodeCont,
   ): MethodData {
     anyConstructor = true
@@ -155,7 +156,7 @@ class ClassBuilderWrapper(
   ) {
     val attribute = InnerClassesAttribute.of(
       InnerClassInfo.of(
-        this.classDesc, Optional.of(this@ClassBuilderWrapper.classData.classDesc),
+        this.descriptor, Optional.of(this@ClassBuilderWrapper.classData.descriptor),
         Optional.of(this.className), this.flags.flagsMask() or AccessFlag.STATIC.mask()
       )
     )
@@ -177,7 +178,7 @@ class ClassBuilderWrapper(
    * need only `() -> Term`.
    */
   internal fun makeLambda(
-    interfaceMethod: MethodData,
+    interfaceMethod: MethodRef,
     captureTypes: ImmutableSeq<ClassDesc>,
     handler: LambdaCodeCont
   ): InvokeDynamicEntry {
@@ -185,21 +186,21 @@ class ClassBuilderWrapper(
     
     // build lambda method
     val lambdaMethodName = this.lambdaMethodName()
-    val fullParam = captureTypes.view().appendedAll(interfaceMethod.signature.parameterList())
+    val fullParam = captureTypes.view().appendedAll(interfaceMethod.descriptor.parameterList())
     
     val lambdaMethodData = private().static().synthetic().method(
-      interfaceMethod.signature.returnType(),
+      interfaceMethod.returnType.erase(),
       lambdaMethodName,
       fullParam.toImmutableSeq(),
     ) {
-      handler.invoke(this@method, LambdaArgumentProvider(captureTypes, interfaceMethod.signature))
+      handler.invoke(this@method, LambdaArgumentProvider(captureTypes, interfaceMethod.descriptor))
     }
     
     // name: the only abstract method that the functional interface defines
     // type: returns the functional interface, parameters are captures
     val nameAndType = pool.nameAndTypeEntry(
-      interfaceMethod.methodName, MethodTypeDesc.of(
-        interfaceMethod.inClass.classDesc,
+      interfaceMethod.name, MethodTypeDesc.of(
+        interfaceMethod.owner,
         captureTypes.asJava()
       )
     )
@@ -208,10 +209,10 @@ class ClassBuilderWrapper(
     // 1st: the function name to the lambda
     // 2nd: function signature with type parameters substituted
     val bsm = pool.bsmEntry(
-      lambdaBootstrapMethodHandle, listOf<ConstantDesc>(
-        interfaceMethod.signature,
+      lambdaBootstrapMethodHandle, listOf(
+        if (interfaceMethod is ParameterizedSignature) interfaceMethod.base.descriptor else interfaceMethod.descriptor,
         lambdaMethodData.makeMethodHandle(),
-        interfaceMethod.signature,
+        interfaceMethod.descriptor,
       ).map(pool::loadableConstantEntry)
     )
     
@@ -224,7 +225,7 @@ class ClassBuilderWrapper(
   fun defaultConstructor(): MethodData {
     return public().constructor(
       defaultConstructorData(classData.superclass),
-      Seq.empty(),
+      ImmutableSeq.empty(),
     ) { }
   }
   

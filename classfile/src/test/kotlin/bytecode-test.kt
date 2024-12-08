@@ -1,4 +1,5 @@
 import kala.collection.Seq
+import kala.collection.immutable.ImmutableSeq
 import org.aya.tool.classfile.*
 import org.junit.jupiter.api.Test
 import java.io.PrintStream
@@ -25,7 +26,7 @@ class BytecodeTest {
     )
     
     val method_PrintStream_println = MethodData(
-      ClassData(PrintStream::class.java),
+      PrintStream::class.java.asDesc(),
       "println",
       AccessFlags.ofMethod(public().mask()),
       MethodTypeDesc.of(ConstantDescs.CD_void, ConstantDescs.CD_String),
@@ -33,17 +34,17 @@ class BytecodeTest {
     )
     
     val method_Boolean_valueOf = MethodData(
-      ClassData(java.lang.Boolean::class.java),
+      java.lang.Boolean::class.java.asDesc(),
       "valueOf",
       AccessFlags.ofMethod(public().static().mask()),
       MethodTypeDesc.of(ConstantDescs.CD_Boolean, ConstantDescs.CD_boolean),
       false
     )
     
-    val method_Object_toString = MD_toString(ClassData(ConstantDescs.CD_Object))
+    val method_Object_toString = MD_toString(ConstantDescs.CD_Object)
     // Runnable#run : () -> ()
     val method_Runnable_run = MethodData(
-      ClassData(Runnable::class.java),
+      Runnable::class.java.asDesc(),
       "run",
       AccessFlags.ofMethod(AccessFlag.PUBLIC, AccessFlag.ABSTRACT),
       MethodTypeDesc.of(ConstantDescs.CD_void),
@@ -51,7 +52,7 @@ class BytecodeTest {
     )
     
     val output = ClassData(ClassDesc.of("SomeMain")).build(ClassFile.of()) {
-      val SomeMain = this.classData.classDesc
+      val SomeMain = this.classData.descriptor
       builder.withVersion(64, 0)
       
       InnerClassData(public(), "ManyMain").nestedClass(ClassFile.of()) {
@@ -61,7 +62,7 @@ class BytecodeTest {
       val field_foo = public().field(ConstantDescs.CD_String, "foo")
       
       val SomeMain_nu = public().constructor(
-        MD_Object_init, Seq.empty(),
+        MD_Object_init, ImmutableSeq.empty(),
         ConstantDescs.CD_Object
       ) { arg0 ->
         field_foo.of(self).set(method_Object_toString.of(arg0).invoke())

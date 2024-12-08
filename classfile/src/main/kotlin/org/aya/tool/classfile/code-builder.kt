@@ -12,6 +12,7 @@ import java.lang.constant.ConstantDescs
 import java.lang.constant.DirectMethodHandleDesc
 import java.lang.reflect.AccessFlag
 
+@Suppress("unused")
 class CodeBuilderWrapper(
   private val inClassFile: ClassBuilderWrapper,
   val builder: CodeBuilder,
@@ -29,7 +30,7 @@ class CodeBuilderWrapper(
   internal fun invoke(
     invokeKind: InvokeKind,
     theObject: CodeCont?,
-    theMethod: MethodData,
+    theMethod: MethodRef,
     args: Seq<CodeCont>,
   ): CodeBuilderWrapper {
     theObject?.invoke(this)
@@ -37,9 +38,9 @@ class CodeBuilderWrapper(
       f.invoke(this)
     }
     
-    val owner = theMethod.inClass.classDesc
-    val name = theMethod.methodName
-    val type = theMethod.signature
+    val owner = theMethod.owner
+    val name = theMethod.name
+    val type = theMethod.descriptor
     
     when (invokeKind) {
       InvokeKind.Interface -> builder.invokeinterface(owner, name, type)
@@ -55,43 +56,44 @@ class CodeBuilderWrapper(
   
   /// region method helper
   
-  data class MethodRef(val data: MethodData, val obj: CodeCont)
+  data class MemberMethodRef(val ref: MethodRef, val obj: CodeCont)
   
   @Contract(pure = true)
-  fun MethodData.of(obj: CodeBuilderWrapper.() -> Unit): MethodRef {
-    assert(!isStatic) { "static" }
-    return MethodRef(this@of, obj)
+  fun MethodRef.of(obj: CodeBuilderWrapper.() -> Unit): MemberMethodRef {
+    assert(invokeKind != DirectMethodHandleDesc.Kind.STATIC) { "not static" }
+    return MemberMethodRef(this@of, obj)
   }
   
-  fun MethodData.invoke(vararg args: CodeCont): ExprCont {
-    assert(isStatic) { "not static" }
+  @Contract(pure = true)
+  fun MethodRef.invoke(vararg args: CodeCont): ExprCont {
+    assert(invokeKind == DirectMethodHandleDesc.Kind.STATIC) { "static" }
     val argSeq = ImmutableArray.Unsafe.wrap<CodeCont>(args)
-    return ExprCont(this.signature.returnType()) {
+    return ExprCont(this.returnType.erase()) {
       invoke(InvokeKind.Static, null, this@invoke, argSeq)
     }
   }
   
   @Contract(pure = true)
-  fun MethodRef.invoke(vararg args: CodeCont): ExprCont {
+  fun MemberMethodRef.invoke(vararg args: CodeCont): ExprCont {
     val argSeq = ImmutableArray.Unsafe.wrap<CodeCont>(args)
-    val cont: CodeCont = when (data.kind()) {
+    val cont: CodeCont = when (ref.invokeKind) {
       DirectMethodHandleDesc.Kind.VIRTUAL -> {
-        { invoke(InvokeKind.Virtual, obj, data, argSeq) }
+        { invoke(InvokeKind.Virtual, obj, ref, argSeq) }
       }
       
       DirectMethodHandleDesc.Kind.INTERFACE_VIRTUAL -> {
-        { invoke(InvokeKind.Interface, obj, data, argSeq) }
+        { invoke(InvokeKind.Interface, obj, ref, argSeq) }
       }
       
       DirectMethodHandleDesc.Kind.SPECIAL,
       DirectMethodHandleDesc.Kind.INTERFACE_SPECIAL -> {
-        { invoke(InvokeKind.Special, obj, data, argSeq) }
+        { invoke(InvokeKind.Special, obj, ref, argSeq) }
       }
       
       else -> throw IllegalArgumentException("not a suitable method")
     }
     
-    return ExprCont(this.data.signature.returnType(), cont)
+    return ExprCont(this.ref.returnType.erase(), cont)
   }
   
   /**
@@ -103,8 +105,8 @@ class CodeBuilderWrapper(
   }
   
   @Contract(pure = true)
-  fun MethodData.nu(vararg args: CodeCont): ExprCont = ExprCont(this.inClass.classDesc) {
-    builder.new_(this@nu.inClass.classDesc)
+  fun MethodData.nu(vararg args: CodeCont): ExprCont = ExprCont(this.owner) {
+    builder.new_(this@nu.owner)
     // invoke constructor
     invoke(InvokeKind.Special, { builder.dup() }, this@nu, ImmutableArray.Unsafe.wrap(args))
   }
@@ -126,12 +128,12 @@ class CodeBuilderWrapper(
   /**
    * A "reference" to a field of certain object, the instruction is wrote until the command is given.
    */
-  data class FieldRef(val data: FieldData, val obj: CodeCont)
+  data class MemberFieldRef(val data: FieldData, val obj: CodeCont)
   
   @Contract(pure = true)
-  fun FieldData.of(obj: CodeCont): FieldRef {
+  fun FieldData.of(obj: CodeCont): MemberFieldRef {
     assert(!this.flags.has(AccessFlag.STATIC))
-    return FieldRef(this@of, obj)
+    return MemberFieldRef(this@of, obj)
   }
   
   fun FieldData.set(value: CodeCont) {
@@ -144,7 +146,7 @@ class CodeBuilderWrapper(
     builder.getstatic(owner, name, returnType)
   }
   
-  fun FieldRef.set(value: CodeCont) {
+  fun MemberFieldRef.set(value: CodeCont) {
     obj.invoke(this@CodeBuilderWrapper)
     value.invoke(this@CodeBuilderWrapper)
     with(this.data) {
@@ -153,7 +155,7 @@ class CodeBuilderWrapper(
   }
   
   @Contract(pure = true)
-  fun FieldRef.get(): ExprCont = ExprCont(data.returnType) {
+  fun MemberFieldRef.get(): ExprCont = ExprCont(data.returnType) {
     obj.invoke(this@CodeBuilderWrapper)
     builder.getfield(data.owner, data.name, data.returnType)
   }
@@ -229,7 +231,7 @@ class CodeBuilderWrapper(
   
   @get:Contract(pure = true)
   val self: ExprCont by lazy {
-    if (hasThis) ExprCont(inClassFile.classData.classDesc, thisRef) else {
+    if (hasThis) ExprCont(inClassFile.classData.descriptor, thisRef) else {
       throw IllegalStateException("static")
     }
   }
@@ -352,14 +354,14 @@ class CodeBuilderWrapper(
   
   /// region lambda helper
   
-  fun MethodData.lambda(vararg captures: ExprCont, handler: LambdaCodeCont): ExprCont {
+  fun MethodRef.lambda(vararg captures: ExprCont, handler: LambdaCodeCont): ExprCont {
     val entry = inClassFile.makeLambda(
       this,
       ImmutableSeq.from(captures.map { it.type }),
       handler
     )
     
-    return ExprCont(this.inClass.classDesc) {
+    return ExprCont(this.owner) {
       ImmutableSeq.from(captures).view().reversed().forEach {
         it.invoke(this@CodeBuilderWrapper)
       }

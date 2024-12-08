@@ -21,7 +21,7 @@ val MTD_LambdaMetafactory_metafactory = MethodTypeDesc.of(
 const val MAIN_NAME: String = "main"
 
 val MD_Object_new: MethodData = MethodData(
-  ClassData(ConstantDescs.CD_Object),
+  ConstantDescs.CD_Object,
   ConstantDescs.INIT_NAME,
   AccessFlags.ofMethod(public().mask()),
   ConstantDescs.MTD_void,

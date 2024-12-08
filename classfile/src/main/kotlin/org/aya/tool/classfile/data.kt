@@ -10,35 +10,37 @@ import java.lang.reflect.AccessFlag
 
 /// region ClassData
 
-interface ClassData {
+interface ClassData : ClassRef {
   val flags: AccessFlags
-  val classDesc: ClassDesc
-  val interfaces: ImmutableSeq<ClassData>
-  val superclass: ClassData
+  override val descriptor: ClassDesc
+  val interfaces: ImmutableSeq<ClassDesc>
+  val superclass: ClassDesc
+  override val polyCount: Int
   
   /**
    * The simple name of this class, note that it might not be the class file name because there is nested class.
    */
-  val className: String get() = classDesc.displayName()
+  val className: String get() = descriptor.displayName()
+  val sourceClassName: String get() = className.substringAfterLast('$')
   
   fun build(file: ClassFile, parent: DefaultClassOutput?, handler: ClassBuilderWrapper.() -> Unit): ClassOutput {
     val output: DefaultClassOutput = parent ?: DefaultClassOutput(MutableMap.create())
     val extraMask = if (!flags.has(AccessFlag.INTERFACE)) AccessFlag.SUPER.mask() else 0x0
-    val bytecodeOutput = file.build(classDesc) { cb: ClassBuilder ->
+    val bytecodeOutput = file.build(descriptor) { cb: ClassBuilder ->
       cb.withFlags(flags.flagsMask() or extraMask)
       
       val superclass = superclass
       val interfaces = interfaces
-      cb.withSuperclass(superclass.classDesc)
+      cb.withSuperclass(superclass)
       
-      if (interfaces.isNotEmpty) cb.withInterfaceSymbols(interfaces.map { it.classDesc }.asJava())
+      if (interfaces.isNotEmpty) cb.withInterfaceSymbols(interfaces.asJava())
       
       val cbw = ClassBuilderWrapper(this, cb, output)
       handler.invoke(cbw)
       cbw.done()
     }
     
-    output.addOutput(classDesc.displayName(), bytecodeOutput)
+    output.addOutput(descriptor.displayName(), bytecodeOutput)
     return output
   }
   
@@ -52,7 +54,7 @@ interface ClassData {
   ): MethodRefEntry {
     val pool = builder.constantPool()
     return pool.methodRefEntry(
-      classDesc,
+      descriptor,
       ConstantDescs.INIT_NAME,
       MethodTypeDesc.of(ConstantDescs.CD_void, *parameterType)
     )
@@ -62,8 +64,8 @@ interface ClassData {
 fun ClassData(
   flags: AccessFlags,
   className: ClassDesc,
-  interfaces: ImmutableSeq<ClassData>,
-  superclass: ClassData,
+  interfaces: ImmutableSeq<ClassDesc>,
+  superclass: ClassDesc,
 ): ClassData {
   return ClassDataImpl(flags, className, interfaces, superclass)
 }
@@ -73,7 +75,7 @@ fun ClassData(className: ClassDesc): ClassData {
     AccessFlags.ofClass(AccessFlag.PUBLIC),
     className,
     ImmutableSeq.empty(),
-    ClassData(Object::class.java)
+    Object::class.java.asDesc()
   )
 }
 
@@ -84,13 +86,15 @@ fun ClassData(clazz: Class<*>): ClassData {
 
 class ClassDataImpl(
   override val flags: AccessFlags,
-  override val classDesc: ClassDesc,
-  override val interfaces: ImmutableSeq<ClassData>,
-  override val superclass: ClassData,
-) : ClassData
+  override val descriptor: ClassDesc,
+  override val interfaces: ImmutableSeq<ClassDesc>,
+  override val superclass: ClassDesc,
+) : ClassData {
+  override val polyCount: Int = 0
+}
 
 class ClassDataWrapper(val clazz: Class<*>) : ClassData {
-  override val classDesc: ClassDesc by lazy {
+  override val descriptor: ClassDesc by lazy {
     clazz.asDesc()
   }
   
@@ -102,12 +106,16 @@ class ClassDataWrapper(val clazz: Class<*>) : ClassData {
     AccessFlags.ofClass(flagsMark)
   }
   
-  override val interfaces: ImmutableSeq<ClassData> by lazy {
-    ImmutableSeq.from(clazz.interfaces).map { ClassDataWrapper(it) }
+  override val interfaces: ImmutableSeq<ClassDesc> by lazy {
+    ImmutableSeq.from(clazz.interfaces).map { it.asDesc() }
   }
   
-  override val superclass: ClassData by lazy {
-    ClassDataWrapper(clazz.superclass)
+  override val superclass: ClassDesc by lazy {
+    clazz.superclass.asDesc()
+  }
+  
+  override val polyCount: Int by lazy {
+    clazz.typeParameters.size
   }
 }
 
@@ -119,8 +127,8 @@ interface InnerClassData : ClassData {
 fun ClassBuilderWrapper.InnerClassData(
   flags: AccessFlagBuilder,
   className: String,
-  superclass: ClassData = ConstantData.CD_Object,
-  interfaces: ImmutableSeq<ClassData> = ImmutableSeq.empty()
+  superclass: ClassDesc = ConstantDescs.CD_Object,
+  interfaces: ImmutableSeq<ClassDesc> = ImmutableSeq.empty()
 ): InnerClassData {
   return DefaultInnerClassData(AccessFlags.ofClass(flags.mask()), this.classData, className, superclass, interfaces)
 }
@@ -129,12 +137,14 @@ class DefaultInnerClassData(
   override val flags: AccessFlags,
   override val outer: ClassData,
   override val className: String,
-  override val superclass: ClassData,
-  override val interfaces: ImmutableSeq<ClassData>,
+  override val superclass: ClassDesc,
+  override val interfaces: ImmutableSeq<ClassDesc>,
 ) : InnerClassData {
-  override val classDesc: ClassDesc by lazy {
-    outer.classDesc.nested(className)
+  override val descriptor: ClassDesc by lazy {
+    outer.descriptor.nested(className)
   }
+  
+  override val polyCount: Int = 0
 }
 
 /// endregion ClassData
@@ -157,19 +167,22 @@ data class FieldData(
 
 /// region MethodData
 
-interface MethodData {
-  val inClass: ClassData
-  val methodName: String
+interface MethodData : MethodRef {
+  override val owner: ClassDesc
+  override val name: String
   val flags: AccessFlags
-  val signature: MethodTypeDesc
+  override val parameters: ImmutableSeq<Parameter>
+  override val returnType: Parameter
+  
   val isInterface: Boolean
   val isStatic get() = flags.has(AccessFlag.STATIC)
   
-  fun kind(): DirectMethodHandleDesc.Kind {
+  override val invokeKind: DirectMethodHandleDesc.Kind
+    get() {
     if (flags.has(AccessFlag.STATIC))
       return if (isInterface) DirectMethodHandleDesc.Kind.INTERFACE_STATIC
       else DirectMethodHandleDesc.Kind.STATIC
-    if (methodName == ConstantDescs.INIT_NAME || methodName == ConstantDescs.CLASS_INIT_NAME)
+      if (name == ConstantDescs.INIT_NAME || name == ConstantDescs.CLASS_INIT_NAME)
       return if (isInterface) DirectMethodHandleDesc.Kind.INTERFACE_SPECIAL     // TODO: I am not sure
       else DirectMethodHandleDesc.Kind.SPECIAL
     return if (isInterface) DirectMethodHandleDesc.Kind.INTERFACE_VIRTUAL
@@ -178,45 +191,61 @@ interface MethodData {
   
   fun makeMethodHandle(): DirectMethodHandleDesc {
     return MethodHandleDesc.ofMethod(
-      kind(),
-      inClass.classDesc,
-      methodName,
-      signature
+      invokeKind,
+      owner,
+      name,
+      descriptor
     )
   }
   
   fun build(cb: ClassBuilderWrapper, build: CodeCont) {
     val isStatic = isStatic
-    val usedSlot = (if (isStatic) 0 else 1) + signature.parameterCount()
+    val usedSlot = (if (isStatic) 0 else 1) + parameters.size()
     cb.builder.withMethodBody(
-      methodName, signature, flags.flagsMask()
+      name, descriptor, flags.flagsMask()
     ) { codeBuilder ->
       build.invoke(CodeBuilderWrapper(cb, codeBuilder, DefaultVariablePool(usedSlot - 1), !isStatic))
     }
   }
   
   fun makeMethodRefEntry(builder: ConstantPoolBuilder): MethodRefEntry {
-    return builder.methodRefEntry(inClass.classDesc, methodName, signature)
+    return builder.methodRefEntry(owner, name, descriptor)
   }
 }
 
 fun MethodData(
-  inClass: ClassData,
+  inClass: ClassDesc,
   methodName: String,
   flags: AccessFlags,
-  signature: MethodTypeDesc,
+  desc: MethodTypeDesc,
   isInterface: Boolean,
 ): MethodData {
-  return MethodDataImpl(inClass, methodName, flags, signature, isInterface)
+  return MethodData(
+    inClass, methodName, flags,
+    ImmutableSeq.from(desc.parameterList()).map(Parameter::Exact),
+    Parameter.Exact(desc.returnType()),
+    isInterface
+  )
+}
+
+fun MethodData(
+  inClass: ClassDesc,
+  methodName: String,
+  flags: AccessFlags,
+  parameters: ImmutableSeq<Parameter>,
+  returnType: Parameter,
+  isInterface: Boolean,
+): MethodData {
+  return MethodDataImpl(inClass, methodName, flags, parameters, returnType, isInterface)
 }
 
 class MethodDataImpl(
-  override val inClass: ClassData,
-  override val methodName: String,
+  override val owner: ClassDesc,
+  override val name: String,
   override val flags: AccessFlags,
-  override val signature: MethodTypeDesc,
+  override val parameters: ImmutableSeq<Parameter>,
+  override val returnType: Parameter,
   override val isInterface: Boolean,
-) : MethodData {
-}
+) : MethodData
 
 /// endregion MethodData
