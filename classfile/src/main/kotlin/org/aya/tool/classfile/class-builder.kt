@@ -91,8 +91,8 @@ class ClassBuilderWrapper(
     val flags = AccessFlags.ofMethod(this@method.mask())
     val data = MethodData(
       classData.descriptor, methodName, flags,
-      parameterType.map { x -> Parameter.Exact(x) },
-      Parameter.Exact(returnType),
+      parameterType,
+      returnType,
       false
     )
     
@@ -189,7 +189,7 @@ class ClassBuilderWrapper(
     val fullParam = captureTypes.view().appendedAll(interfaceMethod.descriptor.parameterList())
     
     val lambdaMethodData = private().static().synthetic().method(
-      interfaceMethod.returnType.erase(),
+      interfaceMethod.signature.result().erase(),
       lambdaMethodName,
       fullParam.toImmutableSeq(),
     ) {

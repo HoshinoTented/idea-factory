@@ -127,12 +127,12 @@ class BytecodeTest {
       }
       
       main {
-        val String_length = DefaultMethodRef(
+        val String_length = MethodRef(
           ConstantDescs.CD_String,
-          DirectMethodHandleDesc.Kind.VIRTUAL,
-          Parameter.Exact(ConstantDescs.CD_int),
           "length",
-          ImmutableSeq.empty()
+          ImmutableSeq.empty(),
+          ConstantDescs.CD_int,
+          DirectMethodHandleDesc.Kind.VIRTUAL,
         )
         
         val result = let(ConstantDescs.CD_Object)

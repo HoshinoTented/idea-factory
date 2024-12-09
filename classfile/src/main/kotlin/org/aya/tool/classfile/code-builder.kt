@@ -68,7 +68,7 @@ class CodeBuilderWrapper(
   fun MethodRef.invoke(vararg args: CodeCont): ExprCont {
     assert(invokeKind == DirectMethodHandleDesc.Kind.STATIC) { "static" }
     val argSeq = ImmutableArray.Unsafe.wrap<CodeCont>(args)
-    return ExprCont(this.returnType.erase()) {
+    return ExprCont(this.signature.result().erase()) {
       invoke(InvokeKind.Static, null, this@invoke, argSeq)
     }
   }
@@ -93,7 +93,7 @@ class CodeBuilderWrapper(
       else -> throw IllegalArgumentException("not a suitable method")
     }
     
-    return ExprCont(this.ref.returnType.erase(), cont)
+    return ExprCont(this.ref.signature.result().erase(), cont)
   }
   
   /**

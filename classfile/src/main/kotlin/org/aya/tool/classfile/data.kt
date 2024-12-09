@@ -3,7 +3,6 @@ package org.aya.tool.classfile
 import kala.collection.immutable.ImmutableSeq
 import kala.collection.mutable.MutableMap
 import java.lang.classfile.*
-import java.lang.classfile.attribute.SignatureAttribute
 import java.lang.classfile.constantpool.ConstantPoolBuilder
 import java.lang.classfile.constantpool.MethodRefEntry
 import java.lang.constant.*
@@ -171,9 +170,8 @@ data class FieldData(
 interface MethodData : MethodRef {
   override val owner: ClassDesc
   override val name: String
+  override val signature: MethodSignature
   val flags: AccessFlags
-  override val parameters: ImmutableSeq<Parameter>
-  override val returnType: Parameter
   
   val isInterface: Boolean
   val isStatic get() = flags.has(AccessFlag.STATIC)
@@ -201,7 +199,7 @@ interface MethodData : MethodRef {
   
   fun build(cb: ClassBuilderWrapper, build: CodeCont) {
     val isStatic = isStatic
-    val usedSlot = (if (isStatic) 0 else 1) + parameters.size()
+    val usedSlot = (if (isStatic) 0 else 1) + signature.arguments().size
     cb.builder.withMethod(
       name, descriptor, flags.flagsMask()
     ) { mb ->
@@ -220,13 +218,25 @@ fun MethodData(
   inClass: ClassDesc,
   methodName: String,
   flags: AccessFlags,
-  desc: MethodTypeDesc,
+  signature: MethodSignature,
+  isInterface: Boolean,
+): MethodData {
+  return MethodDataImpl(inClass, methodName, signature, flags, isInterface)
+}
+
+fun MethodData(
+  inClass: ClassDesc,
+  methodName: String,
+  flags: AccessFlags,
+  signature: MethodTypeDesc,
   isInterface: Boolean,
 ): MethodData {
   return MethodData(
-    inClass, methodName, flags,
-    ImmutableSeq.from(desc.parameterList()).map(Parameter::Exact),
-    Parameter.Exact(desc.returnType()),
+    inClass,
+    methodName,
+    flags,
+    ImmutableSeq.from(signature.parameterList()),
+    signature.returnType(),
     isInterface
   )
 }
@@ -235,19 +245,20 @@ fun MethodData(
   inClass: ClassDesc,
   methodName: String,
   flags: AccessFlags,
-  parameters: ImmutableSeq<Parameter>,
-  returnType: Parameter,
+  parameters: ImmutableSeq<ClassDesc>,
+  returnType: ClassDesc,
   isInterface: Boolean,
 ): MethodData {
-  return MethodDataImpl(inClass, methodName, flags, parameters, returnType, isInterface)
+  return MethodDataImpl(inClass, methodName, buildSignature {
+    parameters.forEach { +it }
+  }.ret(returnType), flags, isInterface)
 }
 
 class MethodDataImpl(
   override val owner: ClassDesc,
   override val name: String,
+  override val signature: MethodSignature,
   override val flags: AccessFlags,
-  override val parameters: ImmutableSeq<Parameter>,
-  override val returnType: Parameter,
   override val isInterface: Boolean,
 ) : MethodData
 

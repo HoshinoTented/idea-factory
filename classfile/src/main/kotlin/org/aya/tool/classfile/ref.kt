@@ -1,44 +1,42 @@
 package org.aya.tool.classfile
 
+import jdk.internal.classfile.impl.SignaturesImpl
+import kala.collection.immutable.ImmutableMap
 import kala.collection.immutable.ImmutableSeq
+import java.lang.classfile.MethodSignature
 import java.lang.classfile.Signature
 import java.lang.constant.ClassDesc
-import java.lang.constant.ConstantDescs
 import java.lang.constant.DirectMethodHandleDesc
 import java.lang.constant.MethodTypeDesc
+import kotlin.jvm.optionals.getOrNull
 
-// TODO: remove this, use Signature
-sealed interface Parameter {
-  data class Exact(val type: ClassDesc) : Parameter
-  data class Poly(val index: Int) : Parameter
+/**
+ * @param inst the value should be class or interface
+ */
+data class ParameterizedSignature(override val base: MethodRef, val inst: ImmutableMap<String, ClassDesc>) :
+  MethodRef by base {
+  private fun Signature.TypeArg.instantiate(): Signature.TypeArg {
+    if (boundType().isEmpty) return this
+    return Signature.TypeArg.of(boundType().get().instantiate() as Signature.RefTypeSig)
+  }
   
-  fun erase(): ClassDesc {
+  private fun Signature.instantiate(): Signature {
     return when (this) {
-      is Exact -> type
-      is Poly -> ConstantDescs.CD_Object
+      is SignaturesImpl.ArrayTypeSigImpl ->
+        Signature.ArrayTypeSig.of(arrayDepth, componentSignature().instantiate())
+      
+      is SignaturesImpl.ClassTypeSigImpl ->
+        Signature.ClassTypeSig.of(outerType.getOrNull(), className, *(typeArgs.map { it.instantiate() }.toTypedArray()))
+      
+      is SignaturesImpl.TypeVarSigImpl -> Signature.of(inst.get(this.identifier))
+      else -> this
     }
   }
   
-  fun instantiate(inst: ImmutableSeq<ClassDesc>): ClassDesc {
-    return when (this) {
-      is Exact -> type
-      is Poly -> inst.getOrNull(index) ?: throw IndexOutOfBoundsException("instantiate")
-    }
-  }
-  
-  fun asSig(): Signature {
-    return when (this) {
-      is Exact -> Signature.of(this.type)
-      is Poly -> Signature.TypeVarSig.of("T" + this.index)
-    }
-  }
-}
-
-data class ParameterizedSignature(override val base: MethodRef, val inst: ImmutableSeq<ClassDesc>) : MethodRef by base {
-  override val returnType: Parameter = Parameter.Exact(base.returnType.instantiate(inst))
-  override val parameters: ImmutableSeq<Parameter> = base.parameters.map { x ->
-    Parameter.Exact(x.instantiate(inst))
-  }
+  override val signature: MethodSignature = MethodSignature.of(
+    emptyList(), base.signature.throwableSignatures(), base.signature.result().instantiate(),
+    *base.signature.arguments().map { it.instantiate() }.toTypedArray()
+  )
 }
 
 interface ClassRef {
@@ -52,26 +50,35 @@ interface ClassRef {
 interface MethodRef {
   val owner: ClassDesc
   val name: String
-  val returnType: Parameter
-  val parameters: ImmutableSeq<Parameter>
+  val signature: MethodSignature
   val invokeKind: DirectMethodHandleDesc.Kind
   
   val descriptor: MethodTypeDesc
-    get() {
-      return MethodTypeDesc.of(returnType.erase(), parameters.map(Parameter::erase).asJava())
-    }
+    get() = signature.erase()
   
   /**
    * Return the [MethodRef] before instantiation, null if this [MethodRef] haven't been/cannot be instantiated
    */
   val base: MethodRef? get() = (this as? ParameterizedSignature)?.base
-  val isPoly: Boolean get() = parameters.anyMatch { it is Parameter.Poly }
+  val isPoly: Boolean get() = signature.typeParameters().isNotEmpty()
 }
 
 data class DefaultMethodRef(
   override val owner: ClassDesc,
-  override val invokeKind: DirectMethodHandleDesc.Kind,
-  override val returnType: Parameter,
   override val name: String,
-  override val parameters: ImmutableSeq<Parameter>,
+  override val invokeKind: DirectMethodHandleDesc.Kind,
+  override val signature: MethodSignature,
 ) : MethodRef
+
+fun MethodRef(
+  owner: ClassDesc,
+  name: String,
+  parameter: ImmutableSeq<ClassDesc>,
+  result: ClassDesc,
+  invokeKind: DirectMethodHandleDesc.Kind,
+): MethodRef {
+  return DefaultMethodRef(
+    owner, name, invokeKind,
+    MethodSignature.of(MethodTypeDesc.of(result, *parameter.toArray(ClassDesc::class.java)))
+  )
+}
