@@ -239,6 +239,14 @@ class CodeBuilderWrapper(
   @Contract(pure = true)
   fun nil(ty: ClassDesc) = ExprCont(ty, nilRef)
   
+  fun iconst(i: Int): ExprCont = ExprCont(ConstantDescs.CD_int) {
+    builder.iconst(i)
+  }
+  
+  fun aconst(v: String): ExprCont = ExprCont(ConstantDescs.CD_String) {
+    builder.ldc(builder.constantPool().stringEntry(v))
+  }
+  
   fun subscoped(builder: CodeBuilder, newPool: VariablePool): CodeBuilderWrapper {
     return CodeBuilderWrapper(inClassFile, builder, newPool, hasThis)
   }
@@ -249,7 +257,7 @@ class CodeBuilderWrapper(
     }
   }
   
-  /// endregion argument helper
+  /// endregion expression helper
   
   /// region local variable helper
   

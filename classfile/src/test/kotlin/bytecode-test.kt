@@ -7,6 +7,7 @@ import java.lang.classfile.AccessFlags
 import java.lang.classfile.ClassFile
 import java.lang.constant.ClassDesc
 import java.lang.constant.ConstantDescs
+import java.lang.constant.DirectMethodHandleDesc
 import java.lang.constant.MethodTypeDesc
 import java.lang.reflect.AccessFlag
 import java.nio.file.Path
@@ -107,6 +108,36 @@ class BytecodeTest {
         )
         // )
         
+        ret()
+      }
+    }
+    
+    output.writeTo(GEN_DIR)
+  }
+  
+  @Test
+  fun polyMethodWithoutCast() {
+    val output = ClassData(ClassDesc.of("WithoutCast")).build(ClassFile.of()) {
+      this.builder.withVersion(65, 0)
+      
+      defaultConstructor()
+      
+      val id = public().static().method(ConstantDescs.CD_Object, "id", ConstantDescs.CD_Object) {
+        ret(it)
+      }
+      
+      main {
+        val String_length = DefaultMethodRef(
+          ConstantDescs.CD_String,
+          DirectMethodHandleDesc.Kind.VIRTUAL,
+          Parameter.Exact(ConstantDescs.CD_int),
+          "length",
+          ImmutableSeq.empty()
+        )
+        
+        val result = let(ConstantDescs.CD_Object)
+        result.set(id.invoke(aconst("114514")))
+        +String_length.of(result).invoke()
         ret()
       }
     }

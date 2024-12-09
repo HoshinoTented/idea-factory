@@ -1,6 +1,3 @@
-import java.lang.constant.ConstantDescs;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.util.Objects;
 import java.util.function.Function;
 
@@ -13,10 +10,18 @@ public class CodeTest {
     public int j = 255;
   }
 
+  public static enum MyEnum {
+    True, False;
+  }
+
   public int i = 114514;
 
   public CodeTest(int i) {
     this.i = i;
+  }
+
+  public <R> R id(R v) {
+    return v;
   }
 
   public void primitives() {
@@ -32,6 +37,8 @@ public class CodeTest {
     char c = '1';
     boolean zzzz = i > j;
     boolean zzzzz = i == 0;
+    MyEnum ja = MyEnum.True;
+    String str = "114514";
   }
 
   public void arrays() {

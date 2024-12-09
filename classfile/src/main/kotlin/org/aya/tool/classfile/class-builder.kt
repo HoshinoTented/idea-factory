@@ -210,7 +210,7 @@ class ClassBuilderWrapper(
     // 2nd: function signature with type parameters substituted
     val bsm = pool.bsmEntry(
       lambdaBootstrapMethodHandle, listOf(
-        if (interfaceMethod is ParameterizedSignature) interfaceMethod.base.descriptor else interfaceMethod.descriptor,
+        interfaceMethod.base?.descriptor ?: interfaceMethod.descriptor,
         lambdaMethodData.makeMethodHandle(),
         interfaceMethod.descriptor,
       ).map(pool::loadableConstantEntry)
@@ -226,7 +226,9 @@ class ClassBuilderWrapper(
     return public().constructor(
       defaultConstructorData(classData.superclass),
       ImmutableSeq.empty(),
-    ) { }
+    ) {
+      ret()
+    }
   }
   
   fun done() {

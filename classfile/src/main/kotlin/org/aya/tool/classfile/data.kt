@@ -3,6 +3,7 @@ package org.aya.tool.classfile
 import kala.collection.immutable.ImmutableSeq
 import kala.collection.mutable.MutableMap
 import java.lang.classfile.*
+import java.lang.classfile.attribute.SignatureAttribute
 import java.lang.classfile.constantpool.ConstantPoolBuilder
 import java.lang.classfile.constantpool.MethodRefEntry
 import java.lang.constant.*
@@ -201,10 +202,12 @@ interface MethodData : MethodRef {
   fun build(cb: ClassBuilderWrapper, build: CodeCont) {
     val isStatic = isStatic
     val usedSlot = (if (isStatic) 0 else 1) + parameters.size()
-    cb.builder.withMethodBody(
+    cb.builder.withMethod(
       name, descriptor, flags.flagsMask()
-    ) { codeBuilder ->
-      build.invoke(CodeBuilderWrapper(cb, codeBuilder, DefaultVariablePool(usedSlot - 1), !isStatic))
+    ) { mb ->
+      mb.withCode {
+        build.invoke(CodeBuilderWrapper(cb, it, DefaultVariablePool(usedSlot - 1), !isStatic))
+      }
     }
   }
   
