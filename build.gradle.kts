@@ -6,8 +6,6 @@ plugins {
 group = "org.example"
 version = "1.0-SNAPSHOT"
 
-val javaVersion = 22
-
 allprojects {
   repositories {
     mavenCentral()
@@ -21,10 +19,6 @@ dependencies {
 subprojects {
   apply {
     plugin("java")
-  }
-  
-  repositories {
-    mavenCentral()
   }
   
   dependencies {

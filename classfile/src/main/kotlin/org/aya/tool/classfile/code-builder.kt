@@ -6,6 +6,7 @@ import kala.collection.immutable.ImmutableSeq
 import org.jetbrains.annotations.Contract
 import java.lang.classfile.CodeBuilder
 import java.lang.classfile.Opcode
+import java.lang.classfile.Signature
 import java.lang.classfile.TypeKind
 import java.lang.constant.ClassDesc
 import java.lang.constant.ConstantDescs
@@ -38,15 +39,21 @@ class CodeBuilderWrapper(
       f.invoke(this)
     }
     
-    val owner = theMethod.owner
-    val name = theMethod.name
-    val type = theMethod.descriptor
+    val base = theMethod.base ?: theMethod
+    val owner = base.owner
+    val name = base.name
+    val type = base.descriptor
     
     when (invokeKind) {
       InvokeKind.Interface -> builder.invokeinterface(owner, name, type)
       InvokeKind.Virtual -> builder.invokevirtual(owner, name, type)
       InvokeKind.Static -> builder.invokestatic(owner, name, type)
       InvokeKind.Special -> builder.invokespecial(owner, name, type)
+    }
+    
+    if (theMethod is ParameterizedSignature && theMethod.base.signature.result() is Signature.TypeVarSig) {
+      val result = theMethod.base.signature.result() as Signature.ClassTypeSig
+      builder.checkcast(result.classDesc())
     }
     
     return this
@@ -117,7 +124,7 @@ class CodeBuilderWrapper(
     } else {
       val ty = assertValidType(value.type)
       +value
-      builder.returnInstruction(TypeKind.fromDescriptor(ty.descriptorString()))
+      builder.return_(TypeKind.fromDescriptor(ty.descriptorString()))
     }
   }
   
@@ -189,7 +196,7 @@ class CodeBuilderWrapper(
       assert(type.isClassOrInterface)
       return ExprCont(ConstantDescs.CD_boolean) {
         invoke(this)
-        builder.instanceof_(type)
+        builder.instanceOf(type)
       }
     }
     
@@ -239,10 +246,12 @@ class CodeBuilderWrapper(
   @Contract(pure = true)
   fun nil(ty: ClassDesc) = ExprCont(ty, nilRef)
   
+  @Contract(pure = true)
   fun iconst(i: Int): ExprCont = ExprCont(ConstantDescs.CD_int) {
     builder.iconst(i)
   }
   
+  @Contract(pure = true)
   fun aconst(v: String): ExprCont = ExprCont(ConstantDescs.CD_String) {
     builder.ldc(builder.constantPool().stringEntry(v))
   }
@@ -267,7 +276,7 @@ class CodeBuilderWrapper(
     }
     
     override fun invoke(p1: CodeBuilderWrapper) {
-      p1.builder.loadInstruction(type.typeKind, slot)
+      p1.builder.loadLocal(type.typeKind, slot)
     }
   }
   
@@ -284,7 +293,7 @@ class CodeBuilderWrapper(
     return ExprCont(ty) {
       +get()
       builder.iconst(idx)
-      builder.arrayLoadInstruction(ty.typeKind)
+      builder.arrayLoad(ty.typeKind)
     }
   }
   
@@ -311,7 +320,7 @@ class CodeBuilderWrapper(
     // variable type is never `void`, so we don't have to check the result
     assertTypeMatch(type, value.type)
     value.invoke(this@CodeBuilderWrapper)
-    builder.storeInstruction(type.typeKind, slot)
+    builder.storeLocal(type.typeKind, slot)
   }
   
   fun Variable.setArr(idx: Int, value: ExprCont) {
@@ -321,7 +330,7 @@ class CodeBuilderWrapper(
     +get()
     builder.iconst(idx)
     value.invoke(this@CodeBuilderWrapper)
-    builder.arrayStoreInstruction(ty.typeKind)
+    builder.arrayStore(ty.typeKind)
   }
   
   fun mkArray(type: ClassDesc, length: Int): ExprCont {
@@ -353,7 +362,7 @@ class CodeBuilderWrapper(
         // value
         +element
         // store
-        builder.arrayStoreInstruction(arr.type.typeKind)
+        builder.arrayStore(arr.type.typeKind)
       }
     }
   }

@@ -1,3 +1,6 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
 apply {
   plugin("kotlin")
 }
@@ -17,4 +20,17 @@ tasks.withType<Test> {
 
 tasks.withType<JavaExec> {
   jvmArgs = listOf("--enable-preview")
+}
+
+val javaVersion = JavaVersion.VERSION_22
+
+java {
+  toolchain {
+    targetCompatibility = javaVersion
+    sourceCompatibility = javaVersion
+  }
+}
+
+tasks.withType<KotlinCompile> {
+  compilerOptions.jvmTarget.set(JvmTarget.JVM_22)
 }

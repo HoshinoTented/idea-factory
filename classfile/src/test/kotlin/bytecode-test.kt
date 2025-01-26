@@ -122,8 +122,12 @@ class BytecodeTest {
       
       defaultConstructor()
       
-      val id = public().static().method(ConstantDescs.CD_Object, "id", ConstantDescs.CD_Object) {
-        ret(it)
+      val id = public().static().method("id") {
+        val T = typeVar()
+        +T
+        ret(T)
+      }.withBody {
+        ret(it.arg(0))
       }
       
       main {

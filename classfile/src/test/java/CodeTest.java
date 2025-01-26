@@ -1,13 +1,24 @@
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 import java.util.Objects;
 import java.util.function.Function;
 
 public class CodeTest {
+  @Retention(RetentionPolicy.CLASS)
+  public @interface MyAnno {
+    String value();
+  }
+
   interface Interface {
     void out();
   }
 
   public static final class Nested {
     public int j = 255;
+  }
+
+  public final class Inner {
+    public int j = i;
   }
 
   public static enum MyEnum {

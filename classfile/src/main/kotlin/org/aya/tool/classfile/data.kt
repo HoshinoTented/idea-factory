@@ -3,6 +3,7 @@ package org.aya.tool.classfile
 import kala.collection.immutable.ImmutableSeq
 import kala.collection.mutable.MutableMap
 import java.lang.classfile.*
+import java.lang.classfile.attribute.SignatureAttribute
 import java.lang.classfile.constantpool.ConstantPoolBuilder
 import java.lang.classfile.constantpool.MethodRefEntry
 import java.lang.constant.*
@@ -203,6 +204,7 @@ interface MethodData : MethodRef {
     cb.builder.withMethod(
       name, descriptor, flags.flagsMask()
     ) { mb ->
+      mb.with(SignatureAttribute.of(signature))
       mb.withCode {
         build.invoke(CodeBuilderWrapper(cb, it, DefaultVariablePool(usedSlot - 1), !isStatic))
       }

@@ -6,6 +6,7 @@ import kala.collection.immutable.ImmutableSeq
 import java.lang.classfile.MethodSignature
 import java.lang.classfile.Signature
 import java.lang.constant.ClassDesc
+import java.lang.constant.ConstantDescs
 import java.lang.constant.DirectMethodHandleDesc
 import java.lang.constant.MethodTypeDesc
 import kotlin.jvm.optionals.getOrNull
@@ -16,19 +17,20 @@ import kotlin.jvm.optionals.getOrNull
 data class ParameterizedSignature(override val base: MethodRef, val inst: ImmutableMap<String, ClassDesc>) :
   MethodRef by base {
   private fun Signature.TypeArg.instantiate(): Signature.TypeArg {
-    if (boundType().isEmpty) return this
-    return Signature.TypeArg.of(boundType().get().instantiate() as Signature.RefTypeSig)
+    return when (this) {
+      is Signature.TypeArg.Bounded -> Signature.TypeArg.of(boundType().instantiate() as Signature.RefTypeSig)
+      is Signature.TypeArg.Unbounded -> this
+    }
   }
   
   private fun Signature.instantiate(): Signature {
     return when (this) {
-      is SignaturesImpl.ArrayTypeSigImpl ->
-        Signature.ArrayTypeSig.of(arrayDepth, componentSignature().instantiate())
+      is Signature.ArrayTypeSig -> Signature.ArrayTypeSig.of(arrayDepth(), componentSignature().instantiate())
       
-      is SignaturesImpl.ClassTypeSigImpl ->
-        Signature.ClassTypeSig.of(outerType.getOrNull(), className, *(typeArgs.map { it.instantiate() }.toTypedArray()))
+      is Signature.ClassTypeSig ->
+        Signature.ClassTypeSig.of(outerType().getOrNull(), className(), *(typeArgs().map { it.instantiate() }.toTypedArray()))
       
-      is SignaturesImpl.TypeVarSigImpl -> Signature.of(inst.get(this.identifier))
+      is Signature.TypeVarSig -> Signature.of(inst.get(this.identifier()))
       else -> this
     }
   }

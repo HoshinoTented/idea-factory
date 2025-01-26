@@ -1,6 +1,5 @@
 package org.aya.tool.classfile
 
-import jdk.internal.classfile.impl.SignaturesImpl
 import java.lang.classfile.MethodSignature
 import java.lang.classfile.Signature
 import java.lang.constant.ClassDesc
@@ -13,7 +12,7 @@ class SignatureBuilder(
   private var polyCount: Int,
   private val typeVars: MutableList<Signature.TypeParam>,
 ) {
-  fun typeVar(classBound: ClassDesc?, vararg interfaceBounds: ClassDesc): Signature.TypeVarSig {
+  fun typeVar(classBound: ClassDesc? = null, vararg interfaceBounds: ClassDesc): Signature.TypeVarSig {
     val param = Signature.TypeParam.of(
       "T$polyCount",
       classBound?.let(Signature.ClassTypeSig::of),
@@ -51,11 +50,15 @@ inline fun buildSignature(builder: SignatureBuilder.() -> Unit): SignatureBuilde
 
 fun Signature.erase(): ClassDesc {
   return when (this) {
-    is SignaturesImpl.BaseTypeSigImpl -> ClassDesc.of(this.signatureString())
-    is SignaturesImpl.ArrayTypeSigImpl -> componentSignature().erase().arrayType(arrayDepth)
-    is SignaturesImpl.ClassTypeSigImpl -> ClassDesc.ofInternalName(className)
-    is SignaturesImpl.TypeVarSigImpl -> ConstantDescs.CD_Object
+    is Signature.BaseTypeSig -> ClassDesc.of(this.signatureString())
+    is Signature.ArrayTypeSig -> componentSignature().erase().arrayType(arrayDepth())
+    is Signature.ClassTypeSig -> ClassDesc.ofInternalName(className())
+    is Signature.TypeVarSig -> ConstantDescs.CD_Object
   }
+}
+
+fun Signature.ArrayTypeSig.arrayDepth(): Int {
+  return this.signatureString().takeWhile { it != '[' }.length
 }
 
 fun MethodSignature.erase(): MethodTypeDesc {

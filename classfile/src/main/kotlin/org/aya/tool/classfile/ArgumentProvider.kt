@@ -10,7 +10,7 @@ interface ArgumentProvider {
   companion object {
     fun mkLoad(type: ClassDesc, slot: Int): CodeBuilderWrapper.ExprCont {
       return CodeBuilderWrapper.ExprCont(type) {
-        builder.loadInstruction(TypeKind.fromDescriptor(type.descriptorString()), slot)
+        builder.loadLocal(TypeKind.fromDescriptor(type.descriptorString()), slot)
       }
     }
   }

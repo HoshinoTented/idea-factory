@@ -1,10 +1,11 @@
 package org.aya.tool.classfile
 
-import kala.collection.Seq
 import kala.collection.immutable.ImmutableSeq
+import kala.collection.mutable.MutableList
 import java.lang.classfile.AccessFlags
 import java.lang.classfile.ClassBuilder
 import java.lang.classfile.ClassFile
+import java.lang.classfile.MethodSignature
 import java.lang.classfile.attribute.InnerClassInfo
 import java.lang.classfile.attribute.InnerClassesAttribute
 import java.lang.classfile.constantpool.InvokeDynamicEntry
@@ -56,6 +57,30 @@ class ClassBuilderWrapper(
   }
   
   fun AccessFlagBuilder.method(
+    methodName: String,
+    builder: SignatureBuilder.() -> MethodSignature,
+  ): MethodData {
+    val sig = SignatureBuilder(MutableList.create(), 0, MutableList.create()).builder()
+    
+    return MethodData(
+      classData.descriptor,
+      methodName,
+      AccessFlags.ofMethod(this.mask()),
+      sig,
+      classData.flags.has(AccessFlag.INTERFACE)
+    )
+  }
+  
+  fun MethodData.withBody(handler: MethodCodeCont): MethodData {
+    build(this@ClassBuilderWrapper) {
+      val argProvider = DefaultArgumentProvider(this@withBody.descriptor, this@withBody.isStatic)
+      handler.invoke(this, argProvider)
+    }
+    
+    return this
+  }
+  
+  fun AccessFlagBuilder.method(
     returnType: ClassDesc,
     methodName: String,
     handler: MethodCodeCont0,
@@ -88,19 +113,10 @@ class ClassBuilderWrapper(
     parameterType: ImmutableSeq<ClassDesc>,
     handler: MethodCodeCont,
   ): MethodData {
-    val flags = AccessFlags.ofMethod(this@method.mask())
-    val data = MethodData(
-      classData.descriptor, methodName, flags,
-      parameterType,
-      returnType,
-      false
-    )
-    
-    data.build(this@ClassBuilderWrapper) {
-      handler.invoke(this, DefaultArgumentProvider(data.descriptor, !data.isStatic))
-    }
-    
-    return data
+    return method(methodName) {
+      parameterType.forEach { +it }
+      ret(returnType)
+    }.withBody(handler)
   }
   
   fun AccessFlagBuilder.constructor(
