@@ -1,5 +1,5 @@
 plugins {
-  kotlin("jvm") version "1.9.23"
+  kotlin("jvm") version "2.0.0"
 }
 
 group = "org.example"
@@ -15,15 +15,13 @@ allprojects {
   }
   
   dependencies {
-    implementation("org.glavo.kala:kala-common:0.70.0")
+    implementation(kotlin("stdlib"))
+    implementation("org.glavo.kala:kala-common:0.80.0")
     testImplementation(kotlin("test"))
+  }
+  
+  tasks.test {
+    useJUnitPlatform()
   }
 }
 
-tasks.test {
-  useJUnitPlatform()
-}
-
-kotlin {
-  jvmToolchain(21)
-}
