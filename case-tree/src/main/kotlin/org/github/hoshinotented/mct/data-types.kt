@@ -25,18 +25,8 @@ sealed interface DataType {
 
 sealed interface Pattern {
   companion object {
-    fun check(patterns: Array<out Any>): ImmutableSeq<Pattern> {
-      return ImmutableSeq.from(patterns).map {
-        when (it) {
-          is String -> Bind(it)
-          is Pattern -> it
-          else -> TODO()
-        }
-      }
-    }
-    
-    operator fun Constructor.invoke(vararg patterns: Any): Pattern {
-      return Con(this, check(patterns))
+    operator fun Constructor.invoke(vararg patterns: Pattern): Pattern {
+      return Con(this, ImmutableSeq.from(patterns))
     }
   }
   
