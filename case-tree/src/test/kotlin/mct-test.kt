@@ -27,6 +27,10 @@ class MatchingBuilder(
   }
 }
 
+data object Empty : DataType.Destructible {
+  override val constructors: ImmutableSeq<Constructor> = ImmutableSeq.empty()
+}
+
 private val parameter = Parameter("n", Nat)
 
 class Tester {
@@ -38,7 +42,7 @@ class Tester {
   private val m = Parameter("m", Nat)
   
   @Test
-  fun test0() {
+  fun trivial0() {
     // def plus (a b : Nat) : Nat
     // | zro, b => b
     // | suc a, b => suc (plus a b)
@@ -54,7 +58,7 @@ class Tester {
   }
   
   @Test
-  fun test1() {
+  fun complicate0() {
     // def what (a b : Nat) : Nat
     // | zro, zro =>
     // | zro, suc zro =>
@@ -76,7 +80,7 @@ class Tester {
   }
   
   @Test
-  fun test2() {
+  fun redundant0() {
     // def what (n m : Nat) : Nat
     // | zro, zro =>
     // | a, suc b =>
@@ -92,7 +96,7 @@ class Tester {
   }
   
   @Test
-  fun test3() {
+  fun inexhaustive0() {
     // def what (n m : Nat) : Nat
     // | zro, b =>
     // | a, zro =>
@@ -102,6 +106,23 @@ class Tester {
       clause(zro(), b)
       clause(a, zro())
       clause(a, suc(b))
+    }.build()
+    
+    println(build(0, matching).toDoc().debugRender())
+  }
+  
+  @Test
+  fun absurd0() {
+    // def what (n : Nat) (m : Empty) : Nat
+    // | zro, () =>
+    // | suc zro, () =>
+    // | a, () =>
+    val matching = MatchingBuilder(ImmutableSeq.of(n, Parameter("m", Empty))).apply {
+      // we dont have absurd pattern!! sorry con zro
+      // we can't use a bind as a placeholder, as the algorithm will skip it
+      clause(zro(), zro())
+      clause(suc(zro()), zro())
+      clause(a, zro())
     }.build()
     
     println(build(0, matching).toDoc().debugRender())
