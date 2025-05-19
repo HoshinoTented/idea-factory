@@ -26,7 +26,7 @@ class BytecodeTest {
   fun test0() {
     val field_System_out = FieldData(
       System::class.java.asDesc(),
-      AccessFlags.ofField(public().static().final().mask()),
+      public().static().final().build(),
       PrintStream::class.java.asDesc(),
       "out"
     )
@@ -34,7 +34,7 @@ class BytecodeTest {
     val method_PrintStream_println = MethodData(
       PrintStream::class.java.asDesc(),
       "println",
-      AccessFlags.ofMethod(public().mask()),
+      public().build(),
       MethodTypeDesc.of(ConstantDescs.CD_void, ConstantDescs.CD_String),
       false
     )
@@ -42,7 +42,7 @@ class BytecodeTest {
     val method_Boolean_valueOf = MethodData(
       Boolean::class.java.asDesc(),
       "valueOf",
-      AccessFlags.ofMethod(public().static().mask()),
+      public().static().build(),
       MethodTypeDesc.of(ConstantDescs.CD_Boolean, ConstantDescs.CD_boolean),
       false
     )
@@ -52,7 +52,7 @@ class BytecodeTest {
     val method_Runnable_run = MethodData(
       Runnable::class.java.asDesc(),
       "run",
-      AccessFlags.ofMethod(AccessFlag.PUBLIC, AccessFlag.ABSTRACT),
+      public().abstract().build(),
       MethodTypeDesc.of(ConstantDescs.CD_void),
       true
     )

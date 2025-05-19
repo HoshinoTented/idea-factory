@@ -1,15 +1,18 @@
 package org.aya.tool.classfile.data
 
+import kala.collection.immutable.ImmutableMap
 import kala.collection.immutable.ImmutableSeq
 import org.aya.tool.classfile.AccessFlagSet
 import org.aya.tool.classfile.ClassBuilderWrapper
 import org.aya.tool.classfile.CodeBuilderWrapper
 import org.aya.tool.classfile.CodeCont
 import org.aya.tool.classfile.DefaultVariablePool
-import org.aya.tool.classfile.ParameterizedSignature
+import org.aya.tool.classfile.arrayDepth
+import org.aya.tool.classfile.data.ParameterizedSignature
 import org.aya.tool.classfile.buildSignature
 import org.aya.tool.classfile.erase
 import java.lang.classfile.MethodSignature
+import java.lang.classfile.Signature
 import java.lang.classfile.attribute.SignatureAttribute
 import java.lang.classfile.constantpool.ConstantPoolBuilder
 import java.lang.classfile.constantpool.MethodRefEntry
@@ -19,6 +22,7 @@ import java.lang.constant.DirectMethodHandleDesc
 import java.lang.constant.MethodHandleDesc
 import java.lang.constant.MethodTypeDesc
 import java.lang.reflect.AccessFlag
+import kotlin.jvm.optionals.getOrNull
 
 /**
  * A reference to a method, which is designed to contain minimum information for method invocation
@@ -157,3 +161,39 @@ class MethodDataImpl(
   override val flags: AccessFlagSet,
   override val isInterface: Boolean,
 ) : MethodData
+
+/**
+ * [org.aya.tool.classfile.data.ParameterizedSignature] is a [MethodRef] which generic type parameters are instantiated.
+ *
+ * // TODO: accept other type variable
+ * @param inst the value should be class or interface
+ */
+data class ParameterizedSignature(override val base: MethodRef, val inst: ImmutableMap<String, ClassDesc>) :
+  MethodRef by base {
+  private fun Signature.TypeArg.instantiate(): Signature.TypeArg {
+    return when (this) {
+      is Signature.TypeArg.Bounded -> Signature.TypeArg.of(boundType().instantiate() as Signature.RefTypeSig)
+      is Signature.TypeArg.Unbounded -> this
+    }
+  }
+  
+  private fun Signature.instantiate(): Signature {
+    return when (this) {
+      is Signature.ArrayTypeSig -> Signature.ArrayTypeSig.of(arrayDepth(), componentSignature().instantiate())
+      is Signature.ClassTypeSig ->
+        Signature.ClassTypeSig.of(
+          outerType().getOrNull(),
+          className(),
+          *(typeArgs().map { it.instantiate() }.toTypedArray())
+        )
+      
+      is Signature.TypeVarSig -> Signature.of(inst.get(this.identifier()))
+      is Signature.BaseTypeSig -> this
+    }
+  }
+  
+  override val signature: MethodSignature = MethodSignature.of(
+    emptyList(), base.signature.throwableSignatures(), base.signature.result().instantiate(),
+    *base.signature.arguments().map { it.instantiate() }.toTypedArray()
+  )
+}

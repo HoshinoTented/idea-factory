@@ -2,10 +2,12 @@ package org.aya.tool.classfile
 
 import kala.collection.immutable.ImmutableSeq
 import org.aya.tool.classfile.ArgumentProvider.Companion.mkLoad
-import java.lang.classfile.TypeKind
 import java.lang.constant.ClassDesc
 import java.lang.constant.MethodTypeDesc
 
+/**
+ * [ArgumentProvider] provides a way to safely load certain argument
+ */
 interface ArgumentProvider {
   companion object {
     fun mkLoad(type: ClassDesc, slot: Int): CodeBuilderWrapper.ExprCont {

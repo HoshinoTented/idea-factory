@@ -17,6 +17,10 @@ value class AccessFlagBuilder(val flags: MutableSet<AccessFlag> = MutableEnumSet
     flags.add(AccessFlag.FINAL)
   }
   
+  fun abstract(): AccessFlagBuilder = apply {
+    flags.add(AccessFlag.ABSTRACT)
+  }
+  
   fun trait(): AccessFlagBuilder = apply {
     flags.add(AccessFlag.INTERFACE)
   }

@@ -6,6 +6,7 @@ import kala.collection.immutable.ImmutableSeq
 import org.aya.tool.classfile.data.FieldData
 import org.aya.tool.classfile.data.MethodData
 import org.aya.tool.classfile.data.MethodRef
+import org.aya.tool.classfile.data.ParameterizedSignature
 import org.jetbrains.annotations.Contract
 import java.lang.classfile.CodeBuilder
 import java.lang.classfile.Opcode
