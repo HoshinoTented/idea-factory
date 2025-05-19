@@ -43,10 +43,10 @@ fun assertTypeMatch(lhs: ClassDesc, rhs: ClassDesc): Boolean {
   
   assert(lhsDesc == rhsDesc) {
     """
-        type not match:
-          lhs: $lhsDesc
-          rhs: $rhsDesc
-      """.trimIndent()
+      type not match:
+        lhs: $lhsDesc
+        rhs: $rhsDesc
+    """.trimIndent()
   }
   
   return lhs.descriptorString() != ConstantDescs.CD_void.descriptorString()

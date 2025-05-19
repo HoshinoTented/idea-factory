@@ -1,5 +1,6 @@
 package org.aya.tool.classfile
 
+import org.aya.tool.classfile.data.MethodData
 import java.lang.classfile.AccessFlags
 import java.lang.constant.ClassDesc
 import java.lang.constant.ConstantDescs
@@ -13,7 +14,7 @@ fun defaultConstructorData(owner: ClassDesc): MethodData {
   return MethodData(
     owner,
     ConstantDescs.INIT_NAME,
-    AccessFlags.ofMethod(AccessFlag.PUBLIC),
+    AccessFlagSet(AccessFlag.PUBLIC),
     ConstantDescs.MTD_void,
     false
   )
@@ -22,7 +23,7 @@ fun defaultConstructorData(owner: ClassDesc): MethodData {
 fun MD_toString(owner: ClassDesc): MethodData {
   // public String toString();
   return MethodData(
-    owner, toString_NAME, AccessFlags.ofMethod(AccessFlag.PUBLIC),
+    owner, toString_NAME, AccessFlagSet(AccessFlag.PUBLIC),
     MethodTypeDesc.of(ConstantDescs.CD_String), false
   )
 }

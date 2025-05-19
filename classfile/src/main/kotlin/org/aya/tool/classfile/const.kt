@@ -1,9 +1,11 @@
 package org.aya.tool.classfile
 
-import java.lang.classfile.AccessFlags
+import org.aya.tool.classfile.data.ClassData
+import org.aya.tool.classfile.data.MethodData
 import java.lang.constant.ConstantDescs
 import java.lang.constant.MethodTypeDesc
 import java.lang.invoke.LambdaMetafactory
+import java.lang.reflect.AccessFlag
 
 /**
  * @see LambdaMetafactory.metafactory
@@ -23,7 +25,7 @@ const val MAIN_NAME: String = "main"
 val MD_Object_new: MethodData = MethodData(
   ConstantDescs.CD_Object,
   ConstantDescs.INIT_NAME,
-  AccessFlags.ofMethod(public().mask()),
+  AccessFlagSet(AccessFlag.PUBLIC),
   ConstantDescs.MTD_void,
   false
 )

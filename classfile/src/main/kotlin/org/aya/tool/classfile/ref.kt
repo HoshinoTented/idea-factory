@@ -1,14 +1,10 @@
 package org.aya.tool.classfile
 
-import jdk.internal.classfile.impl.SignaturesImpl
 import kala.collection.immutable.ImmutableMap
-import kala.collection.immutable.ImmutableSeq
+import org.aya.tool.classfile.data.MethodRef
 import java.lang.classfile.MethodSignature
 import java.lang.classfile.Signature
 import java.lang.constant.ClassDesc
-import java.lang.constant.ConstantDescs
-import java.lang.constant.DirectMethodHandleDesc
-import java.lang.constant.MethodTypeDesc
 import kotlin.jvm.optionals.getOrNull
 
 /**
@@ -41,46 +37,3 @@ data class ParameterizedSignature(override val base: MethodRef, val inst: Immuta
   )
 }
 
-interface ClassRef {
-  val descriptor: ClassDesc
-  val polyCount: Int
-}
-
-/**
- * A reference to a method, which is designed to contain minimum information for method invocation
- */
-interface MethodRef {
-  val owner: ClassDesc
-  val name: String
-  val signature: MethodSignature
-  val invokeKind: DirectMethodHandleDesc.Kind
-  
-  val descriptor: MethodTypeDesc
-    get() = signature.erase()
-  
-  /**
-   * Return the [MethodRef] before instantiation, null if this [MethodRef] haven't been/cannot be instantiated
-   */
-  val base: MethodRef? get() = (this as? ParameterizedSignature)?.base
-  val isPoly: Boolean get() = signature.typeParameters().isNotEmpty()
-}
-
-data class DefaultMethodRef(
-  override val owner: ClassDesc,
-  override val name: String,
-  override val invokeKind: DirectMethodHandleDesc.Kind,
-  override val signature: MethodSignature,
-) : MethodRef
-
-fun MethodRef(
-  owner: ClassDesc,
-  name: String,
-  parameter: ImmutableSeq<ClassDesc>,
-  result: ClassDesc,
-  invokeKind: DirectMethodHandleDesc.Kind,
-): MethodRef {
-  return DefaultMethodRef(
-    owner, name, invokeKind,
-    MethodSignature.of(MethodTypeDesc.of(result, *parameter.toArray(ClassDesc::class.java)))
-  )
-}

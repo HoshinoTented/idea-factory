@@ -11,14 +11,25 @@ public class CodeTest {
 
   interface Interface {
     void out();
+
+    default void defaultFn() {
+      System.out.println("wow");
+    }
+
+    static void interfaceStatic() {
+    }
   }
 
   public static final class Nested {
     public int j = 255;
+
+    public static final class NestedNested {
+    }
   }
 
   public final class Inner {
     public int j = i;
+    public Object what = new Nested();
   }
 
   public static enum MyEnum {
@@ -48,6 +59,7 @@ public class CodeTest {
     char c = '1';
     boolean zzzz = i > j;
     boolean zzzzz = i == 0;
+    boolean zzzzzz = null instanceof String;
     MyEnum ja = MyEnum.True;
     String str = "114514";
   }
@@ -57,6 +69,7 @@ public class CodeTest {
     long[] la = {42, 43};
     Object[] oa = {new Object()};
     Object oao = oa[0];
+    int length = ba.length;
   }
 
   public void boxing() {
@@ -69,9 +82,10 @@ public class CodeTest {
   }
 
   public void invocation() {
-    Objects.requireNonNull(byte.class.toString());
+    Objects.requireNonNull(byte.class.toString(), "ohno");
     System.out.println("bar");
     String what = (String) new Object();
+    Interface.interfaceStatic();
   }
 
   public int switchCase(int i) {
@@ -107,6 +121,17 @@ public class CodeTest {
     };
 
     return result;
+  }
+
+  public void condition(boolean b) {
+    int result = 0;
+    if (b) {
+      int local = 1;
+      result = local;
+    } else {
+      String local = "2";
+      result = Integer.valueOf(local);
+    }
   }
 
   public static void main(String[] args) throws NoSuchMethodException, IllegalAccessException {

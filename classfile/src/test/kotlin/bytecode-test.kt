@@ -1,8 +1,13 @@
-import kala.collection.Seq
 import kala.collection.immutable.ImmutableSeq
 import org.aya.tool.classfile.*
+import org.aya.tool.classfile.data.ClassData
+import org.aya.tool.classfile.data.FieldData
+import org.aya.tool.classfile.data.InnerClassData
+import org.aya.tool.classfile.data.MethodData
+import org.aya.tool.classfile.data.MethodRef
 import org.junit.jupiter.api.Test
 import java.io.PrintStream
+import java.lang.Boolean
 import java.lang.classfile.AccessFlags
 import java.lang.classfile.ClassFile
 import java.lang.constant.ClassDesc
@@ -35,7 +40,7 @@ class BytecodeTest {
     )
     
     val method_Boolean_valueOf = MethodData(
-      java.lang.Boolean::class.java.asDesc(),
+      Boolean::class.java.asDesc(),
       "valueOf",
       AccessFlags.ofMethod(public().static().mask()),
       MethodTypeDesc.of(ConstantDescs.CD_Boolean, ConstantDescs.CD_boolean),

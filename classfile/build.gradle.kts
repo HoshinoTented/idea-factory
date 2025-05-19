@@ -22,7 +22,7 @@ tasks.withType<JavaExec> {
   jvmArgs = listOf("--enable-preview")
 }
 
-val javaVersion = JavaVersion.VERSION_22
+val javaVersion = JavaVersion.VERSION_24
 
 java {
   toolchain {
@@ -32,5 +32,5 @@ java {
 }
 
 tasks.withType<KotlinCompile> {
-  compilerOptions.jvmTarget.set(JvmTarget.JVM_22)
+  compilerOptions.jvmTarget.set(JvmTarget.JVM_24)
 }

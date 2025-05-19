@@ -1,10 +1,12 @@
 plugins {
   java
-  kotlin("jvm") version "2.0.10"
+  kotlin("jvm") version "2.2.0-RC"
 }
 
 group = "org.example"
 version = "1.0-SNAPSHOT"
+
+val kalaVersion = "0.82.0"
 
 allprojects {
   repositories {
@@ -22,7 +24,7 @@ subprojects {
   }
   
   dependencies {
-    implementation("org.glavo.kala:kala-common:0.70.0")
+    implementation("org.glavo.kala:kala-common:$kalaVersion")
     testImplementation(platform("org.junit:junit-bom:5.11.3"))
     testImplementation("org.junit.jupiter:junit-jupiter-api")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

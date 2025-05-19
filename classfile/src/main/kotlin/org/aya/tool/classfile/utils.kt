@@ -4,6 +4,10 @@ package org.aya.tool.classfile
  * A continuation about instruction generation.
  * When used as expression, i.e. arguments,
  * the continuation must push/load a value to the stack.
+ *
+ * ```
+ * forall stack, {stack} CodeCont {exists value, value :: stack}
+ * ```
  */
 typealias CodeCont = CodeBuilderWrapper.() -> Unit
 

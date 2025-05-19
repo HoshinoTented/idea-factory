@@ -3,6 +3,9 @@ package org.aya.tool.classfile
 import kala.collection.Seq
 import kala.collection.immutable.ImmutableArray
 import kala.collection.immutable.ImmutableSeq
+import org.aya.tool.classfile.data.FieldData
+import org.aya.tool.classfile.data.MethodData
+import org.aya.tool.classfile.data.MethodRef
 import org.jetbrains.annotations.Contract
 import java.lang.classfile.CodeBuilder
 import java.lang.classfile.Opcode
@@ -336,13 +339,13 @@ class CodeBuilderWrapper(
   fun mkArray(type: ClassDesc, length: Int): ExprCont {
     assert(length >= 0)
     val kind = type.typeKind
-    if (kind === TypeKind.VoidType) {
+    if (kind === TypeKind.VOID) {
       throw IllegalArgumentException("array of void")
     }
     
     return ExprCont(type.arrayType(1)) {
       builder.iconst(length)
-      if (kind !== TypeKind.ReferenceType) {
+      if (kind !== TypeKind.REFERENCE) {
         builder.newarray(kind)
       } else {
         builder.anewarray(type)

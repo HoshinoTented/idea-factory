@@ -2,7 +2,11 @@ package org.aya.tool.classfile
 
 import kala.collection.immutable.ImmutableSeq
 import kala.collection.mutable.MutableList
-import java.lang.classfile.AccessFlags
+import org.aya.tool.classfile.data.ClassData
+import org.aya.tool.classfile.data.FieldData
+import org.aya.tool.classfile.data.InnerClassData
+import org.aya.tool.classfile.data.MethodData
+import org.aya.tool.classfile.data.MethodRef
 import java.lang.classfile.ClassBuilder
 import java.lang.classfile.ClassFile
 import java.lang.classfile.MethodSignature
@@ -35,8 +39,7 @@ class ClassBuilderWrapper(
   private var lambdaCounter: Int = 0
   
   fun AccessFlagBuilder.field(type: ClassDesc, name: String): FieldData {
-    val mask = AccessFlags.ofField(this@field.mask())
-    return FieldData(classData.descriptor, mask, type, name).apply {
+    return FieldData(classData.descriptor, this.build(), type, name).apply {
       build(builder)
     }
   }
@@ -65,7 +68,7 @@ class ClassBuilderWrapper(
     return MethodData(
       classData.descriptor,
       methodName,
-      AccessFlags.ofMethod(this.mask()),
+      this.build(),
       sig,
       classData.flags.has(AccessFlag.INTERFACE)
     )
@@ -173,7 +176,7 @@ class ClassBuilderWrapper(
     val attribute = InnerClassesAttribute.of(
       InnerClassInfo.of(
         this.descriptor, Optional.of(this@ClassBuilderWrapper.classData.descriptor),
-        Optional.of(this.className), this.flags.flagsMask() or AccessFlag.STATIC.mask()
+        Optional.of(this.className), *(this.flags + AccessFlag.STATIC).toArray()
       )
     )
     
@@ -207,7 +210,7 @@ class ClassBuilderWrapper(
     val lambdaMethodData = private().static().synthetic().method(
       interfaceMethod.signature.result().erase(),
       lambdaMethodName,
-      fullParam.toImmutableSeq(),
+      fullParam.toSeq(),
     ) {
       handler.invoke(this@method, LambdaArgumentProvider(captureTypes, interfaceMethod.descriptor))
     }
