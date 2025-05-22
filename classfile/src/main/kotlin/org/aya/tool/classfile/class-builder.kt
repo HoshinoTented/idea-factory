@@ -3,6 +3,7 @@ package org.aya.tool.classfile
 import kala.collection.immutable.ImmutableSeq
 import kala.collection.mutable.MutableList
 import org.aya.tool.classfile.data.ClassData
+import org.aya.tool.classfile.data.ClassDataBuilder
 import org.aya.tool.classfile.data.FieldData
 import org.aya.tool.classfile.data.InnerClassData
 import org.aya.tool.classfile.data.MethodData
@@ -153,6 +154,12 @@ class ClassBuilderWrapper(
     )
   }
   
+  fun AccessFlagBuilder.classes(name: String, builder: ClassDataBuilder.() -> Unit): InnerClassData {
+    return ClassDataBuilder(classData, this@classes.build(), classData.descriptor.nested(name))
+      .apply(builder)
+      .buildInner()
+  }
+  
   fun AccessFlagBuilder.constructor(
     superConstructor: MethodData,
     superArguments: ImmutableSeq<CodeCont>,
@@ -161,7 +168,7 @@ class ClassBuilderWrapper(
   ): MethodData {
     anyConstructor = true
     return method(ConstantDescs.CD_void, ConstantDescs.INIT_NAME, parameterType) {
-      invoke(CodeBuilderWrapper.InvokeKind.Special, CodeBuilderWrapper.thisRef, superConstructor, superArguments)
+      superConstructor.supers(superArguments)
       handler.invoke(this, it)
     }
   }

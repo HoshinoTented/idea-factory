@@ -1,6 +1,7 @@
 package org.aya.tool.classfile
 
 import kala.collection.Seq
+import kala.collection.SeqLike
 import kala.collection.immutable.ImmutableArray
 import kala.collection.immutable.ImmutableSeq
 import org.aya.tool.classfile.data.FieldData
@@ -39,7 +40,7 @@ class CodeBuilderWrapper(
     args: Seq<CodeCont>,
   ): CodeBuilderWrapper {
     theObject?.invoke(this)
-    args.view().reversed().forEach { f ->
+    args.view().forEach { f ->
       f.invoke(this)
     }
     
@@ -56,7 +57,7 @@ class CodeBuilderWrapper(
     }
     
     if (theMethod is ParameterizedSignature && theMethod.base.signature.result() is Signature.TypeVarSig) {
-      val result = theMethod.base.signature.result() as Signature.ClassTypeSig
+      val result = theMethod.signature.result() as Signature.ClassTypeSig
       builder.checkcast(result.classDesc())
     }
     
@@ -73,6 +74,29 @@ class CodeBuilderWrapper(
   fun MethodRef.of(obj: CodeBuilderWrapper.() -> Unit): MemberMethodRef {
     assert(invokeKind != DirectMethodHandleDesc.Kind.STATIC) { "not static" }
     return MemberMethodRef(this@of, obj)
+  }
+  
+  private fun ensureConstructor(ref: MethodRef) {
+    assert(ref.name == ConstantDescs.INIT_NAME && ref.descriptor.returnType() == ConstantDescs.CD_void) {
+      "constructor"
+    }
+  }
+  
+  fun MethodRef.supers(vararg args: CodeCont): ExprCont {
+    assert(invokeKind == DirectMethodHandleDesc.Kind.SPECIAL) { "special" }
+    
+    return ExprCont(ConstantDescs.CD_void) {
+      val argSeq = ImmutableArray.Unsafe.wrap<CodeCont>(args)
+      invoke(InvokeKind.Special, thisRef, this@supers, argSeq)
+    }
+  }
+  
+  fun MethodRef.supers(args: Seq<CodeCont>): ExprCont {
+    assert(invokeKind == DirectMethodHandleDesc.Kind.SPECIAL) { "special" }
+    
+    return ExprCont(ConstantDescs.CD_void) {
+      invoke(InvokeKind.Special, thisRef, this@supers, args)
+    }
   }
   
   @Contract(pure = true)

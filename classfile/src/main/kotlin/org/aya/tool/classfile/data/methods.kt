@@ -2,26 +2,16 @@ package org.aya.tool.classfile.data
 
 import kala.collection.immutable.ImmutableMap
 import kala.collection.immutable.ImmutableSeq
-import org.aya.tool.classfile.AccessFlagSet
-import org.aya.tool.classfile.ClassBuilderWrapper
-import org.aya.tool.classfile.CodeBuilderWrapper
-import org.aya.tool.classfile.CodeCont
-import org.aya.tool.classfile.DefaultVariablePool
-import org.aya.tool.classfile.arrayDepth
-import org.aya.tool.classfile.data.ParameterizedSignature
-import org.aya.tool.classfile.buildSignature
-import org.aya.tool.classfile.erase
+import org.aya.tool.classfile.*
 import java.lang.classfile.MethodSignature
 import java.lang.classfile.Signature
 import java.lang.classfile.attribute.SignatureAttribute
 import java.lang.classfile.constantpool.ConstantPoolBuilder
 import java.lang.classfile.constantpool.MethodRefEntry
-import java.lang.constant.ClassDesc
-import java.lang.constant.ConstantDescs
-import java.lang.constant.DirectMethodHandleDesc
-import java.lang.constant.MethodHandleDesc
-import java.lang.constant.MethodTypeDesc
+import java.lang.constant.*
 import java.lang.reflect.AccessFlag
+import java.util.Arrays
+import java.util.stream.Collectors
 import kotlin.jvm.optionals.getOrNull
 
 /**
@@ -179,14 +169,20 @@ data class ParameterizedSignature(override val base: MethodRef, val inst: Immuta
   
   private fun Signature.instantiate(): Signature {
     return when (this) {
-      is Signature.ArrayTypeSig -> Signature.ArrayTypeSig.of(arrayDepth(), componentSignature().instantiate())
-      is Signature.ClassTypeSig ->
+      is Signature.ArrayTypeSig -> {
+        val decomposed = this.decompose()
+        val depth = decomposed.component1
+        val elementType = decomposed.component2
+        Signature.ArrayTypeSig.of(depth, elementType.instantiate())
+      }
+      
+      is Signature.ClassTypeSig -> {
         Signature.ClassTypeSig.of(
           outerType().getOrNull(),
           className(),
           *(typeArgs().map { it.instantiate() }.toTypedArray())
         )
-      
+      }
       is Signature.TypeVarSig -> Signature.of(inst.get(this.identifier()))
       is Signature.BaseTypeSig -> this
     }

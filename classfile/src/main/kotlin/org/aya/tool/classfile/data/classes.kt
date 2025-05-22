@@ -20,11 +20,12 @@ import java.lang.reflect.AccessFlag
 
 interface ClassRef {
   val descriptor: ClassDesc
+  val flags: AccessFlagSet
   val polyCount: Int
 }
 
 interface ClassData : ClassRef {
-  val flags: AccessFlagSet
+  override val flags: AccessFlagSet
   override val descriptor: ClassDesc
   val interfaces: ImmutableSeq<ClassDesc>
   val superclass: ClassDesc
@@ -133,6 +134,10 @@ class ClassDataWrapper(val clazz: Class<*>) : ClassData {
 
 /// region inner class
 
+/**
+ * Information of a nested class, note that both inner class and static class are represented by [InnerClassData],
+ * [flags] can tell the static-ness.
+ */
 interface InnerClassData : ClassData {
   val outer: ClassData
   override val className: String

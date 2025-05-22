@@ -66,6 +66,8 @@ data class AccessFlagSet(private val set: ImmutableSet<AccessFlag>) {
     return set.toArray(AccessFlag::class.java)
   }
   
+  val isStatic: Boolean get() = set.contains(AccessFlag.STATIC)
+  
   /**
    * @see jdk.internal.classfile.impl.Util.flagsToBits
    */
